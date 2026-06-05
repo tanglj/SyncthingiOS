@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var settings: AppSettings
     @EnvironmentObject private var store: SyncthingStore
+    @EnvironmentObject private var core: SyncthingCoreManager
     @State private var isRestartConfirmationPresented = false
     @State private var draftBaseURL = ""
     @State private var draftAPIKey = ""
@@ -12,6 +13,8 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     connectionStatus
+                    embeddedCoreCard
+                    syncFolderCard
                     connectionForm
                     syncthingActions
                     aboutCard
@@ -119,6 +122,121 @@ struct SettingsView: View {
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
+    private var embeddedCoreCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Embedded Core")
+                .font(.title3.weight(.bold))
+
+            HStack(spacing: 13) {
+                Image(systemName: coreStatusIcon)
+                    .font(.headline)
+                    .foregroundStyle(coreStatusColor)
+                    .frame(width: 34, height: 34)
+                    .background(coreStatusColor.opacity(0.12))
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(core.state.title)
+                        .font(.headline)
+                    Text(core.state.message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    Task {
+                        await core.start()
+                        if core.state.isRunning {
+                            settings.useEmbeddedCore()
+                            draftBaseURL = settings.baseURLString
+                            draftAPIKey = settings.apiKey
+                            store.configure(with: settings.snapshot)
+                            await store.refresh()
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        if core.state.isStarting {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.white)
+                        } else {
+                            Image(systemName: "play.fill")
+                        }
+                        Text(core.state.isStarting ? "Starting" : "Start")
+                    }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!core.state.canStart)
+
+                Button {
+                    core.stop()
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 46)
+                }
+                .buttonStyle(.bordered)
+                .disabled(!core.state.isRunning && !core.state.isStarting)
+            }
+
+            Button {
+                settings.useEmbeddedCore()
+                draftBaseURL = settings.baseURLString
+                draftAPIKey = settings.apiKey
+                store.configure(with: settings.snapshot)
+                Task { await store.refresh() }
+            } label: {
+                Label("Use Local Core API", systemImage: "link")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+            }
+            .buttonStyle(.bordered)
+        }
+        .padding(18)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private var syncFolderCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Sync Folder")
+                .font(.title3.weight(.bold))
+
+            HStack(spacing: 12) {
+                Image(systemName: "folder.fill")
+                    .font(.headline)
+                    .foregroundStyle(.blue)
+                    .frame(width: 34, height: 34)
+                    .background(Color.blue.opacity(0.12))
+                    .clipShape(Circle())
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("App Documents / Syncthing")
+                        .font(.headline)
+                    Text("Syncthing writes only inside this app's own Documents directory.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(18)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
     private var syncthingActions: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Syncthing")
@@ -143,7 +261,7 @@ struct SettingsView: View {
 
     private var aboutCard: some View {
         VStack(spacing: 12) {
-            infoRow("Client", value: "SwiftUI REST wrapper")
+            infoRow("Client", value: "SwiftUI foreground core")
             Divider()
             infoRow("Version", value: "0.1.0")
         }
@@ -239,5 +357,33 @@ struct SettingsView: View {
         if store.errorMessage != nil { return .orange }
         if store.lastConnectedAt != nil { return .green }
         return .blue
+    }
+
+    private var coreStatusIcon: String {
+        switch core.state {
+        case .running:
+            return "checkmark.circle.fill"
+        case .starting:
+            return "hourglass"
+        case .stopped:
+            return "power.circle"
+        case .unavailable:
+            return "shippingbox"
+        case .failed:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var coreStatusColor: Color {
+        switch core.state {
+        case .running:
+            return .green
+        case .starting:
+            return .blue
+        case .stopped, .unavailable:
+            return .secondary
+        case .failed:
+            return .orange
+        }
     }
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DashboardView: View {
     @EnvironmentObject private var store: SyncthingStore
+    @EnvironmentObject private var core: SyncthingCoreManager
 
     private var folders: [Folder] {
         (store.overview.config?.folders ?? [])
@@ -23,6 +24,7 @@ struct DashboardView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     hero
+                    coreStatusCard
 
                     if let errorMessage = store.errorMessage {
                         errorBanner(errorMessage)
@@ -157,6 +159,31 @@ struct DashboardView: View {
                 )
             }
         }
+    }
+
+    private var coreStatusCard: some View {
+        HStack(spacing: 13) {
+            Image(systemName: coreStatusIcon)
+                .font(.headline)
+                .foregroundStyle(coreStatusColor)
+                .frame(width: 34, height: 34)
+                .background(coreStatusColor.opacity(0.12))
+                .clipShape(Circle())
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(core.state.title)
+                    .font(.headline)
+                Text(core.state.message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private func sectionHeader(_ title: String, count: Int) -> some View {
@@ -357,5 +384,33 @@ struct DashboardView: View {
         if store.errorMessage != nil { return .orange }
         if store.overview.hasData { return .green }
         return .blue
+    }
+
+    private var coreStatusIcon: String {
+        switch core.state {
+        case .running:
+            return "checkmark.circle.fill"
+        case .starting:
+            return "hourglass"
+        case .stopped:
+            return "power.circle"
+        case .unavailable:
+            return "shippingbox"
+        case .failed:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private var coreStatusColor: Color {
+        switch core.state {
+        case .running:
+            return .green
+        case .starting:
+            return .blue
+        case .stopped, .unavailable:
+            return .secondary
+        case .failed:
+            return .orange
+        }
     }
 }

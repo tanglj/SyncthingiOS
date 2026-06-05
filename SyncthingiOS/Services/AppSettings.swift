@@ -17,6 +17,7 @@ final class AppSettings: ObservableObject {
             defaults.removeObject(forKey: Keys.apiKey)
         }
         self.apiKey = KeychainStore.string(for: Keys.apiKey) ?? migratedAPIKey ?? ""
+        clearLegacySyncFolderBookmark()
     }
 
     var snapshot: SyncthingSnapshot {
@@ -40,14 +41,28 @@ final class AppSettings: ObservableObject {
         persist()
     }
 
+    func useEmbeddedCore() {
+        update(
+            baseURLString: SyncthingCoreManager.localBaseURLString,
+            apiKey: SyncthingCoreManager.localAPIKey
+        )
+    }
+
     private func persist() {
         defaults.set(baseURLString, forKey: Keys.baseURL)
         KeychainStore.set(apiKey, for: Keys.apiKey)
         defaults.removeObject(forKey: Keys.apiKey)
     }
 
+    private func clearLegacySyncFolderBookmark() {
+        defaults.removeObject(forKey: Keys.syncFolderBookmark)
+        defaults.removeObject(forKey: Keys.syncFolderName)
+    }
+
     private enum Keys {
         static let baseURL = "syncthing.baseURL"
         static let apiKey = "syncthing.apiKey"
+        static let syncFolderBookmark = "syncthing.syncFolderBookmark"
+        static let syncFolderName = "syncthing.syncFolderName"
     }
 }

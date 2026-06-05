@@ -6,16 +6,17 @@ surface in `../syncthing`.
 
 ## Current Scope
 
-- Configure a Syncthing GUI/API endpoint and API key.
+- Run an embedded Syncthing core while the iOS app is in the foreground.
+- Use the app-owned local Syncthing GUI/API endpoint at
+  `http://127.0.0.1:8384`.
 - Fetch `/rest/system/status`, `/rest/system/version`, `/rest/config`,
   and `/rest/system/connections`.
 - Show local device status, folders, remote devices, and connection state.
 - Open the Syncthing Web GUI from inside the app.
+- Configure an external Syncthing GUI/API endpoint and API key when needed.
 
-This iteration is usable as a controller for an existing Syncthing instance. It
-does not embed or run the Go Syncthing core on iOS yet. That work requires a
-separate iOS build strategy, entitlement review, background execution policy, and
-filesystem access design.
+Background synchronization, Files app integration, and App Store entitlement
+review are intentionally out of scope for this foreground build.
 
 ## Use
 
@@ -28,6 +29,47 @@ filesystem access design.
 
 The API key is stored in Keychain. HTTP is only allowed for local networking by
 default; use HTTPS for remote Syncthing endpoints.
+
+## Embedded Core
+
+The foreground build uses:
+
+- Swift lifecycle owner: `SyncthingCoreManager`
+- Go adapter: `../syncthing/mobile/ioscore`
+- Local API key: `ios-local-syncthing-core`
+- Data home: app Application Support, under `SyncthingCore`
+
+Generate the iOS framework after Go dependencies are available:
+
+```bash
+Scripts/build-ios-core.sh
+```
+
+The script writes `SyncthingiOS/Frameworks/Ioscore.xcframework`. Rebuild the app
+after regenerating the framework. Without the framework, the app still builds
+and shows a clear "Core not bundled" status.
+
+On launch, the app starts the core and waits for `/rest/system/ping` through the
+embedded adapter before showing "Core running".
+
+## Verification
+
+Current verification commands:
+
+```bash
+xcodebuild -project SyncthingiOS.xcodeproj -scheme SyncthingiOS \
+  -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath .derivedData CODE_SIGNING_ALLOWED=NO build
+
+xcodebuild -project SyncthingiOS.xcodeproj -scheme SyncthingiOS \
+  -destination 'platform=iOS,name=<设备名称>' \
+  -derivedDataPath .derivedData-device -allowProvisioningUpdates \
+  DEVELOPMENT_TEAM=<你的 Apple Team ID> build
+```
+
+The foreground build has also been installed on `<设备名称>`. If iOS blocks the
+first launch, trust the developer profile in Settings > General > VPN & Device
+Management.
 
 ## Build
 
