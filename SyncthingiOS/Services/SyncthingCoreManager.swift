@@ -75,6 +75,10 @@ final class SyncthingCoreManager: ObservableObject {
         )
     }
 
+    var syncRootURL: URL? {
+        try? localSyncRootURL()
+    }
+
     init() {
         writeDebugStatus()
     }

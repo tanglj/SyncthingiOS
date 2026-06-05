@@ -10,6 +10,8 @@ struct ContentView: View {
                 switch selectedTab {
                 case .status:
                     DashboardView()
+                case .files:
+                    FileBrowserView()
                 case .webGUI:
                     WebGUIView()
                 case .settings:
@@ -51,6 +53,7 @@ struct ContentView: View {
 
 private enum AppTab: String, CaseIterable, Identifiable {
     case status
+    case files
     case webGUI
     case settings
 
@@ -59,6 +62,7 @@ private enum AppTab: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .status: return "Status"
+        case .files: return "Files"
         case .webGUI: return "Web GUI"
         case .settings: return "Settings"
         }
@@ -67,6 +71,7 @@ private enum AppTab: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .status: return "dot.radiowaves.left.and.right"
+        case .files: return "folder"
         case .webGUI: return "safari"
         case .settings: return "gearshape"
         }

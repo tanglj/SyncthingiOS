@@ -21,6 +21,8 @@
 		0A00000C2C11210000000001 /* SyncthingCoreManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00001C2C11210000000001 /* SyncthingCoreManager.swift */; };
 		0A00000D2C11210000000001 /* Ioscore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0A00001D2C11210000000001 /* Ioscore.xcframework */; };
 		0A00000E2C11210000000001 /* Ioscore.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0A00001D2C11210000000001 /* Ioscore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		0A00000F2C11210000000001 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00001E2C11210000000001 /* FileBrowserView.swift */; };
+		0A0000902C11210000000001 /* MarkdownPreview in Resources */ = {isa = PBXBuildFile; fileRef = 0A0000912C11210000000001 /* MarkdownPreview */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -52,6 +54,8 @@
 		0A00001B2C11210000000001 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		0A00001C2C11210000000001 /* SyncthingCoreManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncthingCoreManager.swift; sourceTree = "<group>"; };
 		0A00001D2C11210000000001 /* Ioscore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Ioscore.xcframework; sourceTree = "<group>"; };
+		0A00001E2C11210000000001 /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
+		0A0000912C11210000000001 /* MarkdownPreview */ = {isa = PBXFileReference; lastKnownFileType = folder; path = MarkdownPreview; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +124,7 @@
 			isa = PBXGroup;
 			children = (
 				0A0000172C11210000000001 /* DashboardView.swift */,
+				0A00001E2C11210000000001 /* FileBrowserView.swift */,
 				0A0000182C11210000000001 /* SettingsView.swift */,
 				0A0000192C11210000000001 /* WebGUIView.swift */,
 			);
@@ -130,6 +135,7 @@
 			isa = PBXGroup;
 			children = (
 				0A00001A2C11210000000001 /* Assets.xcassets */,
+				0A0000912C11210000000001 /* MarkdownPreview */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -202,6 +208,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A00000A2C11210000000001 /* Assets.xcassets in Resources */,
+				0A0000902C11210000000001 /* MarkdownPreview in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -223,6 +230,7 @@
 				0A0000092C11210000000001 /* WebGUIView.swift in Sources */,
 				0A00000B2C11210000000001 /* KeychainStore.swift in Sources */,
 				0A00000C2C11210000000001 /* SyncthingCoreManager.swift in Sources */,
+				0A00000F2C11210000000001 /* FileBrowserView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
