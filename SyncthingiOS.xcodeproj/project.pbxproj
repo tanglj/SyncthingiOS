@@ -23,6 +23,7 @@
 		0A00000E2C11210000000001 /* Ioscore.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0A00001D2C11210000000001 /* Ioscore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		0A00000F2C11210000000001 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00001E2C11210000000001 /* FileBrowserView.swift */; };
 		0A0000902C11210000000001 /* MarkdownPreview in Resources */ = {isa = PBXBuildFile; fileRef = 0A0000912C11210000000001 /* MarkdownPreview */; };
+		0A0000922C11210000000001 /* MarkdownEditor in Resources */ = {isa = PBXBuildFile; fileRef = 0A0000932C11210000000001 /* MarkdownEditor */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -56,6 +57,7 @@
 		0A00001D2C11210000000001 /* Ioscore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Ioscore.xcframework; sourceTree = "<group>"; };
 		0A00001E2C11210000000001 /* FileBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileBrowserView.swift; sourceTree = "<group>"; };
 		0A0000912C11210000000001 /* MarkdownPreview */ = {isa = PBXFileReference; lastKnownFileType = folder; path = MarkdownPreview; sourceTree = "<group>"; };
+		0A0000932C11210000000001 /* MarkdownEditor */ = {isa = PBXFileReference; lastKnownFileType = folder; path = MarkdownEditor; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -136,6 +138,7 @@
 			children = (
 				0A00001A2C11210000000001 /* Assets.xcassets */,
 				0A0000912C11210000000001 /* MarkdownPreview */,
+				0A0000932C11210000000001 /* MarkdownEditor */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -209,6 +212,7 @@
 			files = (
 				0A00000A2C11210000000001 /* Assets.xcassets in Resources */,
 				0A0000902C11210000000001 /* MarkdownPreview in Resources */,
+				0A0000922C11210000000001 /* MarkdownEditor in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

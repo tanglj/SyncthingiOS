@@ -9,7 +9,8 @@ struct FileBrowserView: View {
     @State private var errorMessage: String?
     @State private var previewURL: URL?
     @State private var shareItem: ShareItem?
-    @State private var markdownItem: MarkdownItem?
+    @State private var markdownPreviewItem: MarkdownItem?
+    @State private var markdownEditorItem: MarkdownItem?
 
     let folderURL: URL?
 
@@ -46,8 +47,11 @@ struct FileBrowserView: View {
                 .sheet(item: $shareItem) { item in
                     ActivityView(activityItems: [item.url])
                 }
-                .sheet(item: $markdownItem) { item in
+                .sheet(item: $markdownPreviewItem, onDismiss: loadEntries) { item in
                     MarkdownPreviewView(url: item.url)
+                }
+                .sheet(item: $markdownEditorItem, onDismiss: loadEntries) { item in
+                    MarkdownEditorView(url: item.url)
                 }
         }
     }
@@ -91,12 +95,28 @@ struct FileBrowserView: View {
                     rowContent(entry)
                 }
             } else {
-                Button {
-                    open(entry)
-                } label: {
-                    rowContent(entry)
+                HStack(spacing: 10) {
+                    Button {
+                        open(entry)
+                    } label: {
+                        rowContent(entry)
+                    }
+                    .buttonStyle(.plain)
+
+                    if entry.isMarkdown {
+                        Button {
+                            markdownEditorItem = MarkdownItem(url: entry.url)
+                        } label: {
+                            Image(systemName: "square.and.pencil")
+                                .font(.title2)
+                                .foregroundStyle(.teal)
+                                .frame(width: 38, height: 38)
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Edit")
+                    }
                 }
-                .buttonStyle(.plain)
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button {
                         shareItem = ShareItem(url: entry.url)
@@ -116,6 +136,14 @@ struct FileBrowserView: View {
                     } label: {
                         Label("Share", systemImage: "square.and.arrow.up")
                     }
+
+                    if entry.isMarkdown {
+                        Button {
+                            markdownEditorItem = MarkdownItem(url: entry.url)
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                    }
                 }
             }
         }
@@ -123,7 +151,7 @@ struct FileBrowserView: View {
 
     private func open(_ entry: SharedFileEntry) {
         if entry.isMarkdown {
-            markdownItem = MarkdownItem(url: entry.url)
+            markdownPreviewItem = MarkdownItem(url: entry.url)
         } else {
             previewURL = entry.url
         }
@@ -319,6 +347,369 @@ private struct MarkdownItem: Identifiable {
     let url: URL
 
     var id: URL { url }
+}
+
+private struct MarkdownEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let url: URL
+
+    @State private var text = ""
+    @State private var savedText = ""
+    @State private var errorMessage: String?
+    @State private var isLoading = true
+    @State private var isSaving = false
+
+    private var hasUnsavedChanges: Bool {
+        text != savedText
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let errorMessage, text.isEmpty {
+                    VStack(spacing: 14) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.system(size: 40, weight: .semibold))
+                            .foregroundStyle(.orange)
+                        Text("Unable to Edit")
+                            .font(.title3.weight(.bold))
+                        Text(errorMessage)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(24)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemGroupedBackground))
+                } else {
+                    VStack(spacing: 0) {
+                        if let errorMessage {
+                            Label {
+                                Text(errorMessage)
+                                    .font(.callout)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } icon: {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                            }
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.orange.opacity(0.12))
+                        }
+
+                        CodeMirrorMarkdownEditor(text: $text)
+                    }
+                    .background(Color(.systemBackground))
+                }
+            }
+            .navigationTitle(url.lastPathComponent)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .foregroundStyle(.secondary)
+                }
+
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        Task { await save() }
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Label("Save", systemImage: "checkmark")
+                                .labelStyle(.titleAndIcon)
+                                .font(.headline)
+                        }
+                    }
+                    .foregroundStyle(.green)
+                    .disabled(isLoading || isSaving || !hasUnsavedChanges)
+                }
+            }
+            .onAppear(perform: loadMarkdown)
+        }
+    }
+
+    private func loadMarkdown() {
+        guard isLoading else { return }
+        do {
+            let data = try Data(contentsOf: url)
+            guard let content = String(data: data, encoding: .utf8) ??
+                    String(data: data, encoding: .unicode) else {
+                errorMessage = "The file encoding is not supported."
+                isLoading = false
+                return
+            }
+            text = content
+            savedText = content
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    private func save() async {
+        isSaving = true
+        defer { isSaving = false }
+
+        do {
+            guard let data = text.data(using: .utf8) else {
+                errorMessage = "The file encoding is not supported."
+                return
+            }
+            try data.write(to: url, options: .atomic)
+            savedText = text
+            errorMessage = nil
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct CodeMirrorMarkdownEditor: UIViewRepresentable {
+    @Binding var text: String
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    func makeUIView(context: Context) -> WKWebView {
+        let contentController = WKUserContentController()
+        contentController.add(context.coordinator, name: "editor")
+
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        configuration.userContentController = contentController
+
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.navigationDelegate = context.coordinator
+        webView.backgroundColor = .systemBackground
+        webView.scrollView.backgroundColor = .systemBackground
+        webView.scrollView.keyboardDismissMode = .interactive
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+        context.coordinator.webView = webView
+        webView.loadHTMLString(CodeMirrorHTMLDocument.make(markdown: text), baseURL: CodeMirrorHTMLDocument.baseURL)
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        context.coordinator.text = $text
+        guard context.coordinator.didFinishLoading else { return }
+        guard context.coordinator.lastEditorText != text else { return }
+        let encodedText = CodeMirrorHTMLDocument.jsonString(text)
+        webView.evaluateJavaScript("window.setMarkdown(\(encodedText));")
+        context.coordinator.lastEditorText = text
+    }
+
+    static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
+        uiView.configuration.userContentController.removeScriptMessageHandler(forName: "editor")
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+        var text: Binding<String>
+        weak var webView: WKWebView?
+        var didFinishLoading = false
+        var lastEditorText = ""
+
+        init(text: Binding<String>) {
+            self.text = text
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            didFinishLoading = true
+            lastEditorText = text.wrappedValue
+        }
+
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            guard message.name == "editor",
+                  let payload = message.body as? [String: Any],
+                  let kind = payload["type"] as? String else {
+                return
+            }
+
+            if kind == "change", let value = payload["value"] as? String {
+                lastEditorText = value
+                text.wrappedValue = value
+            }
+        }
+    }
+}
+
+private enum CodeMirrorHTMLDocument {
+    static var baseURL: URL? {
+        Bundle.main.url(forResource: "codemirror", withExtension: "js", subdirectory: "MarkdownEditor")?
+            .deletingLastPathComponent()
+    }
+
+    static func make(markdown: String) -> String {
+        let encodedMarkdown = jsonString(markdown)
+        return """
+        <!doctype html>
+        <html>
+        <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <link rel="stylesheet" href="codemirror.css">
+        <style>
+        :root {
+            color-scheme: light dark;
+            --bg: #ffffff;
+            --text: #1f2328;
+            --gutter: #f6f8fa;
+            --border: #d0d7de;
+            --cursor: #0969da;
+            --selection: rgba(9, 105, 218, 0.18);
+            --line: #f8fafc;
+            --quote: #667085;
+            --link: #0969da;
+            --code: #0a7f51;
+            --heading: #1f6feb;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0d1117;
+                --text: #e6edf3;
+                --gutter: #161b22;
+                --border: #30363d;
+                --cursor: #58a6ff;
+                --selection: rgba(88, 166, 255, 0.25);
+                --line: #111827;
+                --quote: #8b949e;
+                --link: #58a6ff;
+                --code: #7ee787;
+                --heading: #79c0ff;
+            }
+        }
+        html, body, #editor {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background: var(--bg);
+        }
+        .CodeMirror {
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            color: var(--text);
+            font: 16px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            letter-spacing: 0;
+        }
+        .CodeMirror-lines {
+            padding: 16px 0 max(40px, env(safe-area-inset-bottom));
+        }
+        .CodeMirror pre.CodeMirror-line,
+        .CodeMirror pre.CodeMirror-line-like {
+            padding: 0 18px;
+        }
+        .CodeMirror-gutters {
+            background: var(--gutter);
+            border-right: 1px solid var(--border);
+        }
+        .CodeMirror-linenumber {
+            color: #8b949e;
+            padding: 0 8px 0 10px;
+        }
+        .CodeMirror-cursor {
+            border-left-color: var(--cursor);
+        }
+        .CodeMirror-selected {
+            background: var(--selection) !important;
+        }
+        .CodeMirror-activeline-background {
+            background: var(--line);
+        }
+        .cm-header {
+            color: var(--heading);
+            font-weight: 700;
+        }
+        .cm-strong { font-weight: 700; }
+        .cm-em { font-style: italic; }
+        .cm-quote { color: var(--quote); }
+        .cm-link, .cm-url { color: var(--link); }
+        .cm-comment, .cm-string { color: var(--code); }
+        </style>
+        </head>
+        <body>
+        <textarea id="editor"></textarea>
+        <script src="codemirror.js"></script>
+        <script src="xml.js"></script>
+        <script src="markdown.js"></script>
+        <script src="continuelist.js"></script>
+        <script>
+        const initialMarkdown = \(encodedMarkdown);
+        const textarea = document.getElementById('editor');
+        textarea.value = initialMarkdown;
+
+        const editor = CodeMirror.fromTextArea(textarea, {
+            mode: {
+                name: 'markdown',
+                highlightFormatting: true,
+                taskLists: true,
+                strikethrough: true,
+                fencedCodeBlockHighlighting: false
+            },
+            lineNumbers: true,
+            lineWrapping: true,
+            indentUnit: 2,
+            tabSize: 2,
+            extraKeys: {
+                Enter: 'newlineAndIndentContinueMarkdownList'
+            }
+        });
+
+        let applyingExternalValue = false;
+        editor.on('change', () => {
+            if (applyingExternalValue) return;
+            window.webkit.messageHandlers.editor.postMessage({
+                type: 'change',
+                value: editor.getValue()
+            });
+        });
+
+        window.setMarkdown = function(value) {
+            if (editor.getValue() === value) return;
+            applyingExternalValue = true;
+            const cursor = editor.getCursor();
+            editor.setValue(value);
+            editor.setCursor(cursor);
+            applyingExternalValue = false;
+        };
+
+        window.focusEditor = function() {
+            editor.focus();
+        };
+
+        setTimeout(() => {
+            editor.refresh();
+            editor.focus();
+        }, 80);
+        </script>
+        </body>
+        </html>
+        """
+    }
+
+    static func jsonString(_ value: String) -> String {
+        guard let data = try? JSONEncoder().encode(value),
+              var string = String(data: data, encoding: .utf8) else {
+            return "\"\""
+        }
+        string = string.replacingOccurrences(of: "<", with: "\\u003C")
+        return string
+    }
 }
 
 private struct MarkdownPreviewView: View {
