@@ -178,15 +178,23 @@ struct SettingsView: View {
                 .disabled(!core.state.canStart)
 
                 Button {
-                    core.stop()
+                    Task { await core.stop() }
                 } label: {
-                    Label("Stop", systemImage: "stop.fill")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 46)
+                    HStack(spacing: 8) {
+                        if core.state.isStopping {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "stop.fill")
+                        }
+                        Text(core.state.isStopping ? "Stopping" : "Stop")
+                    }
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
                 }
                 .buttonStyle(.bordered)
-                .disabled(!core.state.isRunning && !core.state.isStarting)
+                .disabled((!core.state.isRunning && !core.state.isStarting) || core.state.isStopping)
             }
 
             Button {
@@ -365,6 +373,8 @@ struct SettingsView: View {
             return "checkmark.circle.fill"
         case .starting:
             return "hourglass"
+        case .stopping:
+            return "stop.circle.fill"
         case .stopped:
             return "power.circle"
         case .unavailable:
@@ -380,6 +390,8 @@ struct SettingsView: View {
             return .green
         case .starting:
             return .blue
+        case .stopping:
+            return .orange
         case .stopped, .unavailable:
             return .secondary
         case .failed:

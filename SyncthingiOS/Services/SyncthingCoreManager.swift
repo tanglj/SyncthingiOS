@@ -8,6 +8,7 @@ import Ioscore
 enum SyncthingCoreState: Equatable {
     case stopped
     case starting
+    case stopping
     case running
     case unavailable(String)
     case failed(String)
@@ -18,6 +19,8 @@ enum SyncthingCoreState: Equatable {
             return "Core stopped"
         case .starting:
             return "Starting core"
+        case .stopping:
+            return "Stopping core"
         case .running:
             return "Core running"
         case .unavailable:
@@ -33,6 +36,8 @@ enum SyncthingCoreState: Equatable {
             return "Start the embedded Syncthing core to sync from this iPhone."
         case .starting:
             return "Preparing the local Syncthing home and REST API."
+        case .stopping:
+            return "Shutting down the embedded Syncthing core."
         case .running:
             return "Syncthing is running locally in the foreground and the REST API is reachable."
         case .unavailable(let reason), .failed(let reason):
@@ -50,8 +55,13 @@ enum SyncthingCoreState: Equatable {
         return false
     }
 
+    var isStopping: Bool {
+        if case .stopping = self { return true }
+        return false
+    }
+
     var canStart: Bool {
-        !isRunning && !isStarting
+        !isRunning && !isStarting && !isStopping
     }
 }
 
@@ -84,6 +94,24 @@ final class SyncthingCoreManager: ObservableObject {
     }
 
     func start() async {
+        #if canImport(Ioscore)
+        if state.isRunning {
+            if IoscorePing() {
+                return
+            }
+            state = .starting
+            do {
+                try await Task.detached(priority: .userInitiated) {
+                    try waitForCoreReadiness()
+                }.value
+                state = .running
+                return
+            } catch {
+                state = .stopped
+            }
+        }
+        #endif
+
         guard state.canStart else { return }
         state = .starting
         startSequence += 1
@@ -128,12 +156,14 @@ final class SyncthingCoreManager: ObservableObject {
         #endif
     }
 
-    func stop() {
+    func stop() async {
+        guard state.isRunning || state.isStarting else { return }
         startSequence += 1
+        state = .stopping
         #if canImport(Ioscore)
-        Task.detached(priority: .userInitiated) {
+        await Task.detached(priority: .userInitiated) {
             IoscoreStop()
-        }
+        }.value
         #endif
         activeSyncRootURL = nil
         state = .stopped

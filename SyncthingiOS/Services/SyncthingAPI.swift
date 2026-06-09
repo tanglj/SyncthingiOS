@@ -30,17 +30,21 @@ struct SyncthingAPI {
     func overview() async throws -> SyncthingOverview {
         try validate()
 
-        async let version: SystemVersion = get("/rest/system/version")
-        async let status: SystemStatus = get("/rest/system/status")
-        async let config: SyncthingConfig = get("/rest/config")
-        async let connections: Connections = get("/rest/system/connections")
+        async let version: SystemVersion? = optionalGet("/rest/system/version")
+        async let status: SystemStatus? = optionalGet("/rest/system/status")
+        async let config: SyncthingConfig? = optionalGet("/rest/config")
+        async let connections: Connections? = optionalGet("/rest/system/connections")
 
-        return try await SyncthingOverview(
+        let overview = try await SyncthingOverview(
             version: version,
             status: status,
             config: config,
             connections: connections
         )
+        guard overview.hasData else {
+            throw SyncthingAPIError.invalidResponse
+        }
+        return overview
     }
 
     func restart() async throws {
@@ -63,7 +67,22 @@ struct SyncthingAPI {
         do {
             return try decoder.decode(T.self, from: data)
         } catch {
-            throw SyncthingAPIError.decodingFailed(error.localizedDescription)
+            throw SyncthingAPIError.decodingFailed("\(path): \(error.localizedDescription)")
+        }
+    }
+
+    private func optionalGet<T: Decodable>(_ path: String) async throws -> T? {
+        do {
+            return try await get(path)
+        } catch let error as SyncthingAPIError {
+            switch error {
+            case .httpStatus, .invalidResponse:
+                throw error
+            case .missingAPIKey, .invalidBaseURL, .decodingFailed:
+                return nil
+            }
+        } catch {
+            return nil
         }
     }
 

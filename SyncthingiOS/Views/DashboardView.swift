@@ -392,6 +392,8 @@ struct DashboardView: View {
             return "checkmark.circle.fill"
         case .starting:
             return "hourglass"
+        case .stopping:
+            return "stop.circle.fill"
         case .stopped:
             return "power.circle"
         case .unavailable:
@@ -407,6 +409,8 @@ struct DashboardView: View {
             return .green
         case .starting:
             return .blue
+        case .stopping:
+            return .orange
         case .stopped, .unavailable:
             return .secondary
         case .failed:

@@ -33,7 +33,7 @@ struct SyncthingiOSApp: App {
                             }
                         }
                     case .background:
-                        core.stop()
+                        break
                     case .inactive:
                         break
                     @unknown default:
