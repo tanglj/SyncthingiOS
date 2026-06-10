@@ -11,6 +11,9 @@ struct FileBrowserView: View {
     @State private var shareItem: ShareItem?
     @State private var markdownPreviewItem: MarkdownItem?
     @State private var markdownEditorItem: MarkdownItem?
+    @State private var newItemName = ""
+    @State private var newItemKind: NewItemKind?
+    @State private var newItemErrorMessage: String?
 
     let folderURL: URL?
 
@@ -27,6 +30,10 @@ struct FileBrowserView: View {
         return folderURL.lastPathComponent
     }
 
+    private var canCreateItems: Bool {
+        folderURL != nil
+    }
+
     var body: some View {
         NavigationStack {
             content
@@ -35,6 +42,25 @@ struct FileBrowserView: View {
                 .navigationBarTitleDisplayMode(folderURL == nil ? .large : .inline)
                 .toolbar {
                     ToolbarItemGroup(placement: .topBarTrailing) {
+                        if canCreateItems {
+                            Menu {
+                                Button {
+                                    beginCreating(.folder)
+                                } label: {
+                                    Label("Folder", systemImage: "folder.badge.plus")
+                                }
+
+                                Button {
+                                    beginCreating(.markdownFile)
+                                } label: {
+                                    Label("Markdown File", systemImage: "doc.badge.plus")
+                                }
+                            } label: {
+                                Image(systemName: "plus")
+                            }
+                            .accessibilityLabel("New")
+                        }
+
                         Button {
                             loadEntries()
                         } label: {
@@ -53,6 +79,43 @@ struct FileBrowserView: View {
                 .sheet(item: $markdownEditorItem, onDismiss: loadEntries) { item in
                     MarkdownEditorView(url: item.url)
                 }
+                .alert(newItemKind?.title ?? "New", isPresented: newItemAlertBinding) {
+                    TextField(newItemKind?.placeholder ?? "Name", text: $newItemName)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    Button("Cancel", role: .cancel) {
+                        resetNewItemInput()
+                    }
+                    Button("Create") {
+                        submitNewItem()
+                    }
+                    .disabled(newItemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .alert("Unable to Create", isPresented: newItemErrorBinding) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(newItemErrorMessage ?? "")
+                }
+        }
+    }
+
+    private var newItemAlertBinding: Binding<Bool> {
+        Binding {
+            newItemKind != nil
+        } set: { isPresented in
+            if !isPresented {
+                resetNewItemInput()
+            }
+        }
+    }
+
+    private var newItemErrorBinding: Binding<Bool> {
+        Binding {
+            newItemErrorMessage != nil
+        } set: { isPresented in
+            if !isPresented {
+                newItemErrorMessage = nil
+            }
         }
     }
 
@@ -239,6 +302,99 @@ struct FileBrowserView: View {
             entries = []
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func createItem(named rawName: String, kind: NewItemKind) throws {
+        guard let currentURL else {
+            throw NewItemError("The current folder is not available.")
+        }
+
+        let name = normalizedName(rawName, kind: kind)
+        guard !name.isEmpty else {
+            throw NewItemError("Name cannot be empty.")
+        }
+        guard !name.contains("/") && !name.contains(":") else {
+            throw NewItemError("Name cannot contain path separators.")
+        }
+
+        let url = currentURL.appendingPathComponent(name, isDirectory: kind == .folder)
+        guard !FileManager.default.fileExists(atPath: url.path) else {
+            throw NewItemError("An item with this name already exists.")
+        }
+
+        switch kind {
+        case .folder:
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        case .markdownFile:
+            try Data().write(to: url, options: .atomic)
+        }
+        loadEntries()
+    }
+
+    private func beginCreating(_ kind: NewItemKind) {
+        newItemName = ""
+        newItemKind = kind
+    }
+
+    private func submitNewItem() {
+        guard let newItemKind else { return }
+        do {
+            try createItem(named: newItemName, kind: newItemKind)
+            resetNewItemInput()
+        } catch {
+            resetNewItemInput()
+            newItemErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func resetNewItemInput() {
+        newItemName = ""
+        newItemKind = nil
+    }
+
+    private func normalizedName(_ rawName: String, kind: NewItemKind) -> String {
+        var name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if kind == .markdownFile && !name.lowercased().hasSuffix(".md") {
+            name += ".md"
+        }
+        return name
+    }
+}
+
+private enum NewItemKind: String, Identifiable {
+    case folder
+    case markdownFile
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .folder:
+            return "New Folder"
+        case .markdownFile:
+            return "New Markdown File"
+        }
+    }
+
+    var placeholder: String {
+        switch self {
+        case .folder:
+            return "Folder name"
+        case .markdownFile:
+            return "File name"
+        }
+    }
+}
+
+private struct NewItemError: LocalizedError {
+    let message: String
+
+    init(_ message: String) {
+        self.message = message
+    }
+
+    var errorDescription: String? {
+        message
     }
 }
 
@@ -717,11 +873,15 @@ private struct MarkdownPreviewView: View {
 
     @State private var plainText = ""
     @State private var errorMessage: String?
+    @State private var isLoading = true
 
     var body: some View {
         NavigationStack {
             Group {
-                if let errorMessage {
+                if isLoading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let errorMessage {
                     VStack(spacing: 14) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 40, weight: .semibold))
@@ -736,16 +896,24 @@ private struct MarkdownPreviewView: View {
                     .padding(24)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(.systemGroupedBackground))
-                } else if !plainText.isEmpty {
+                } else if plainText.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 38, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                        Text("Empty Markdown File")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(.systemBackground))
+                } else {
                     MarkdownWebPreview(
                         markdown: plainText,
                         baseURL: url.deletingLastPathComponent(),
                         title: url.deletingPathExtension().lastPathComponent
                     )
                     .background(Color(.systemBackground))
-                } else {
-                    ProgressView()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .navigationTitle(url.lastPathComponent)
@@ -762,11 +930,13 @@ private struct MarkdownPreviewView: View {
     }
 
     private func loadMarkdown() {
+        isLoading = true
         do {
             let data = try Data(contentsOf: url)
             guard let content = String(data: data, encoding: .utf8) ??
                     String(data: data, encoding: .unicode) else {
                 errorMessage = "The file encoding is not supported."
+                isLoading = false
                 return
             }
             plainText = content
@@ -774,6 +944,7 @@ private struct MarkdownPreviewView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+        isLoading = false
     }
 }
 
