@@ -16,30 +16,30 @@ enum SyncthingCoreState: Equatable {
     var title: String {
         switch self {
         case .stopped:
-            return "Core stopped"
+            return "核心已停止"
         case .starting:
-            return "Starting core"
+            return "正在启动核心"
         case .stopping:
-            return "Stopping core"
+            return "正在停止核心"
         case .running:
-            return "Core running"
+            return "核心运行中"
         case .unavailable:
-            return "Core not bundled"
+            return "核心未打包"
         case .failed:
-            return "Core failed"
+            return "核心异常"
         }
     }
 
     var message: String {
         switch self {
         case .stopped:
-            return "Start the embedded Syncthing core to sync from this iPhone."
+            return "启动内置 Syncthing 核心后，可直接从这台 iPhone 同步。"
         case .starting:
-            return "Preparing the local Syncthing home and REST API."
+            return "正在准备本机 Syncthing 主目录和 REST API。"
         case .stopping:
-            return "Shutting down the embedded Syncthing core."
+            return "正在关闭内置 Syncthing 核心。"
         case .running:
-            return "Syncthing is running locally in the foreground and the REST API is reachable."
+            return "Syncthing 正在前台本机运行，REST API 可访问。"
         case .unavailable(let reason), .failed(let reason):
             return reason
         }
@@ -152,7 +152,7 @@ final class SyncthingCoreManager: ObservableObject {
             state = .failed(error.localizedDescription)
         }
         #else
-        state = .unavailable("Syncthing core framework has not been generated yet. Run Scripts/build-ios-core.sh, then rebuild the app.")
+        state = .unavailable("Syncthing core framework 尚未生成。请运行 Scripts/build-ios-core.sh 后重新构建应用。")
         #endif
     }
 
@@ -230,9 +230,9 @@ private enum SyncthingCoreManagerError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .startFailed:
-            return "Syncthing core did not start."
+            return "Syncthing 核心未能启动。"
         case .restAPITimeout:
-            return "Syncthing core started, but the local REST API did not become reachable."
+            return "Syncthing 核心已启动，但本机 REST API 未能连通。"
         case .startupFailed(let message):
             return message
         }

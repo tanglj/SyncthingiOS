@@ -29,12 +29,25 @@ GOCACHE="$GOCACHE" GOMODCACHE="$GOMODCACHE" "$GOMOBILE" init
 
 cd "$SYNCTHING_ROOT"
 
+CORE_VERSION="${VERSION:-}"
+if [[ -z "$CORE_VERSION" ]]; then
+  if [[ -f RELEASE ]]; then
+    CORE_VERSION="$(tr -d '[:space:]' < RELEASE)"
+  else
+    CORE_VERSION="$(git describe --always --dirty --abbrev=8 2>/dev/null || true)"
+  fi
+fi
+if [[ -z "$CORE_VERSION" || "$CORE_VERSION" == "unknown-dev" || ! "$CORE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+  CORE_VERSION="v0.0.0-ios"
+fi
+
 GOCACHE="$GOCACHE" GOMODCACHE="$GOMODCACHE" \
   go generate ./lib/api/auto
 
 GOCACHE="$GOCACHE" GOMODCACHE="$GOMODCACHE" "$GOMOBILE" bind \
   -target=ios,iossimulator \
+  -ldflags="-w -buildid= -X github.com/syncthing/syncthing/lib/build.Version=$CORE_VERSION -X github.com/syncthing/syncthing/lib/build.Tags=ios" \
   -o "$OUT_DIR/Ioscore.xcframework" \
   ./mobile/ioscore
 
-echo "Built $OUT_DIR/Ioscore.xcframework"
+echo "Built $OUT_DIR/Ioscore.xcframework ($CORE_VERSION)"

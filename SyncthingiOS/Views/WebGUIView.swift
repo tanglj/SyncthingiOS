@@ -8,7 +8,7 @@ struct WebGUIView: View {
         NavigationStack {
             SyncthingWebView(url: settings.snapshot.baseURL)
                 .ignoresSafeArea(edges: .bottom)
-                .navigationTitle("Web GUI")
+                .navigationTitle("网页管理")
                 .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -31,4 +31,3 @@ struct SyncthingWebView: UIViewRepresentable {
         }
     }
 }
-

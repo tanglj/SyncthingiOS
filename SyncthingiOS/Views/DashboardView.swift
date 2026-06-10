@@ -32,9 +32,9 @@ struct DashboardView: View {
 
                     metricsGrid
 
-                    sectionHeader("Folders", count: folders.count)
+                    sectionHeader("文件夹", count: folders.count)
                     if folders.isEmpty {
-                        placeholderCard("No folders", systemImage: "folder.badge.questionmark")
+                        placeholderCard("暂无文件夹", systemImage: "folder.badge.questionmark")
                     } else {
                         VStack(spacing: 12) {
                             ForEach(folders) { folder in
@@ -43,9 +43,9 @@ struct DashboardView: View {
                         }
                     }
 
-                    sectionHeader("Devices", count: devices.count)
+                    sectionHeader("设备", count: devices.count)
                     if devices.isEmpty {
-                        placeholderCard("No devices", systemImage: "desktopcomputer.trianglebadge.exclamationmark")
+                        placeholderCard("暂无设备", systemImage: "desktopcomputer.trianglebadge.exclamationmark")
                     } else {
                         VStack(spacing: 12) {
                             ForEach(devices) { device in
@@ -132,13 +132,13 @@ struct DashboardView: View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
                 metricCard(
-                    "Folders",
+                    "文件夹",
                     value: store.overview.config?.folders.count,
                     systemImage: "folder",
                     color: .blue
                 )
                 metricCard(
-                    "Devices",
+                    "设备",
                     value: store.overview.config?.devices.count,
                     systemImage: "desktopcomputer",
                     color: .indigo
@@ -146,13 +146,13 @@ struct DashboardView: View {
             }
             HStack(spacing: 10) {
                 metricCard(
-                    "Online",
+                    "在线",
                     value: onlineDeviceCount,
                     systemImage: "wifi",
                     color: .green
                 )
                 metricCard(
-                    "Uptime",
+                    "运行时间",
                     valueText: store.overview.status?.uptime?.durationText ?? "-",
                     systemImage: "clock",
                     color: .orange
@@ -251,7 +251,7 @@ struct DashboardView: View {
                     Text(folder.displayName)
                         .font(.headline)
                         .lineLimit(1)
-                    Text(folder.type ?? "folder")
+                    Text(folder.type ?? "文件夹")
                         .font(.caption.weight(.medium))
                         .foregroundStyle(.secondary)
                 }
@@ -268,7 +268,7 @@ struct DashboardView: View {
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Rescan \(folder.displayName)")
+                .accessibilityLabel("重新扫描 \(folder.displayName)")
             }
 
             if let path = folder.path, !path.isEmpty {
@@ -278,7 +278,7 @@ struct DashboardView: View {
                     .lineLimit(2)
             }
 
-            Text("\(folder.sharedDeviceCount) shared devices")
+            Text("\(folder.sharedDeviceCount) 台共享设备")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
@@ -288,12 +288,14 @@ struct DashboardView: View {
     }
 
     private func deviceCard(_ device: Device) -> some View {
+        let isLocalDevice = device.deviceID == store.overview.status?.myID
         let connection = store.overview.connections?.connections[device.deviceID]
-        let isConnected = connection?.connected == true
+        let isConnected = isLocalDevice || connection?.connected == true
+        let stateText = isLocalDevice ? "本机设备" : (connection?.stateText ?? "未知")
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Image(systemName: device.paused == true ? "pause.circle.fill" : "desktopcomputer")
+                Image(systemName: device.paused == true ? "pause.circle.fill" : (isLocalDevice ? "iphone" : "desktopcomputer"))
                     .font(.title2)
                     .foregroundStyle(device.paused == true ? .orange : (isConnected ? .green : .secondary))
                     .frame(width: 34)
@@ -302,7 +304,7 @@ struct DashboardView: View {
                     Text(device.displayName)
                         .font(.headline)
                         .lineLimit(1)
-                    Text(connection?.stateText ?? "Unknown")
+                    Text(stateText)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(isConnected ? .green : .secondary)
                 }
@@ -358,19 +360,22 @@ struct DashboardView: View {
     }
 
     private var connectionTitle: String {
-        if store.isLoading { return "Connecting" }
-        if store.errorMessage != nil { return "Connection issue" }
-        if let version = store.overview.version?.version { return version }
-        return store.isConfigured ? "Ready to connect" : "Set up connection"
+        if store.isLoading { return "连接中" }
+        if store.errorMessage != nil { return "连接异常" }
+        if store.overview.hasData { return "Syncthing 运行中" }
+        return store.isConfigured ? "可连接" : "请配置连接"
     }
 
     private var connectionSubtitle: String {
-        if store.isLoading { return "Fetching status from Syncthing." }
-        if store.errorMessage != nil { return "Check the address, API key, and network access." }
-        if let lastConnectedAt = store.lastConnectedAt {
-            return "Last updated \(lastConnectedAt.formatted(date: .omitted, time: .shortened))"
+        if store.isLoading { return "正在从 Syncthing 获取状态。" }
+        if store.errorMessage != nil { return "请检查地址、API Key 和网络访问权限。" }
+        if let version = store.overview.version?.version {
+            return "版本 \(version)"
         }
-        return store.isConfigured ? "Pull down or tap Refresh to load status." : "Add the GUI address and API key in Settings."
+        if let lastConnectedAt = store.lastConnectedAt {
+            return "上次更新 \(lastConnectedAt.formatted(date: .omitted, time: .shortened))"
+        }
+        return store.isConfigured ? "下拉或点击刷新加载状态。" : "请在设置中填写 GUI 地址和 API Key。"
     }
 
     private var connectionIcon: String {

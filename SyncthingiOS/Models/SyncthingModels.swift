@@ -122,8 +122,8 @@ struct TotalConnectionStats: Decodable, Equatable {
 
 extension DeviceConnection {
     var stateText: String {
-        if paused == true { return "Paused" }
-        return connected == true ? "Connected" : "Disconnected"
+        if paused == true { return "已暂停" }
+        return connected == true ? "已连接" : "未连接"
     }
 }
 
@@ -133,9 +133,9 @@ extension Int {
         let hours = (self % 86_400) / 3_600
         let minutes = (self % 3_600) / 60
 
-        if days > 0 { return "\(days)d \(hours)h" }
-        if hours > 0 { return "\(hours)h \(minutes)m" }
-        return "\(minutes)m"
+        if days > 0 { return "\(days)天 \(hours)小时" }
+        if hours > 0 { return "\(hours)小时 \(minutes)分钟" }
+        return "\(minutes)分钟"
     }
 }
 

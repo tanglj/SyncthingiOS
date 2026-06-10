@@ -26,7 +26,7 @@ struct FileBrowserView: View {
     }
 
     private var title: String {
-        guard let folderURL else { return "Files" }
+        guard let folderURL else { return "文件" }
         return folderURL.lastPathComponent
     }
 
@@ -47,18 +47,18 @@ struct FileBrowserView: View {
                                 Button {
                                     beginCreating(.folder)
                                 } label: {
-                                    Label("Folder", systemImage: "folder.badge.plus")
+                                    Label("文件夹", systemImage: "folder.badge.plus")
                                 }
 
                                 Button {
                                     beginCreating(.markdownFile)
                                 } label: {
-                                    Label("Markdown File", systemImage: "doc.badge.plus")
+                                    Label("Markdown 文件", systemImage: "doc.badge.plus")
                                 }
                             } label: {
                                 Image(systemName: "plus")
                             }
-                            .accessibilityLabel("New")
+                            .accessibilityLabel("新建")
                         }
 
                         Button {
@@ -79,20 +79,20 @@ struct FileBrowserView: View {
                 .sheet(item: $markdownEditorItem, onDismiss: loadEntries) { item in
                     MarkdownEditorView(url: item.url)
                 }
-                .alert(newItemKind?.title ?? "New", isPresented: newItemAlertBinding) {
-                    TextField(newItemKind?.placeholder ?? "Name", text: $newItemName)
+                .alert(newItemKind?.title ?? "新建", isPresented: newItemAlertBinding) {
+                    TextField(newItemKind?.placeholder ?? "名称", text: $newItemName)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    Button("Cancel", role: .cancel) {
+                    Button("取消", role: .cancel) {
                         resetNewItemInput()
                     }
-                    Button("Create") {
+                    Button("创建") {
                         submitNewItem()
                     }
                     .disabled(newItemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                .alert("Unable to Create", isPresented: newItemErrorBinding) {
-                    Button("OK", role: .cancel) {}
+                .alert("无法创建", isPresented: newItemErrorBinding) {
+                    Button("好", role: .cancel) {}
                 } message: {
                     Text(newItemErrorMessage ?? "")
                 }
@@ -123,14 +123,14 @@ struct FileBrowserView: View {
     private var content: some View {
         if let errorMessage {
             stateView(
-                "Unable to Open Folder",
+                "无法打开文件夹",
                 message: errorMessage,
                 systemImage: "exclamationmark.folder.fill"
             )
         } else if entries.isEmpty {
             stateView(
-                "No Files",
-                message: "Synced files will appear in App Documents / Syncthing.",
+                "暂无文件",
+                message: "同步文件会显示在我的iPhone / Syncthing 中。",
                 systemImage: "folder"
             )
         } else {
@@ -177,34 +177,34 @@ struct FileBrowserView: View {
                                 .contentShape(Circle())
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("Edit")
+                        .accessibilityLabel("编辑")
                     }
                 }
                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                     Button {
                         shareItem = ShareItem(url: entry.url)
                     } label: {
-                        Label("Share", systemImage: "square.and.arrow.up")
+                        Label("分享", systemImage: "square.and.arrow.up")
                     }
                 }
                 .contextMenu {
                     Button {
                         open(entry)
                     } label: {
-                        Label("Preview", systemImage: "doc.text.magnifyingglass")
+                        Label("预览", systemImage: "doc.text.magnifyingglass")
                     }
 
                     Button {
                         shareItem = ShareItem(url: entry.url)
                     } label: {
-                        Label("Share", systemImage: "square.and.arrow.up")
+                        Label("分享", systemImage: "square.and.arrow.up")
                     }
 
                     if entry.isMarkdown {
                         Button {
                             markdownEditorItem = MarkdownItem(url: entry.url)
                         } label: {
-                            Label("Edit", systemImage: "pencil")
+                            Label("编辑", systemImage: "pencil")
                         }
                     }
                 }
@@ -260,7 +260,7 @@ struct FileBrowserView: View {
             Button {
                 loadEntries()
             } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
+                Label("刷新", systemImage: "arrow.clockwise")
                     .font(.headline)
             }
             .buttonStyle(.bordered)
@@ -273,7 +273,7 @@ struct FileBrowserView: View {
     private func loadEntries() {
         guard let currentURL else {
             entries = []
-            errorMessage = "The app sync folder is not available yet."
+            errorMessage = "应用同步文件夹暂不可用。"
             return
         }
 
@@ -306,20 +306,20 @@ struct FileBrowserView: View {
 
     private func createItem(named rawName: String, kind: NewItemKind) throws {
         guard let currentURL else {
-            throw NewItemError("The current folder is not available.")
+            throw NewItemError("当前文件夹不可用。")
         }
 
         let name = normalizedName(rawName, kind: kind)
         guard !name.isEmpty else {
-            throw NewItemError("Name cannot be empty.")
+            throw NewItemError("名称不能为空。")
         }
         guard !name.contains("/") && !name.contains(":") else {
-            throw NewItemError("Name cannot contain path separators.")
+            throw NewItemError("名称不能包含路径分隔符。")
         }
 
         let url = currentURL.appendingPathComponent(name, isDirectory: kind == .folder)
         guard !FileManager.default.fileExists(atPath: url.path) else {
-            throw NewItemError("An item with this name already exists.")
+            throw NewItemError("同名项目已存在。")
         }
 
         switch kind {
@@ -370,18 +370,18 @@ private enum NewItemKind: String, Identifiable {
     var title: String {
         switch self {
         case .folder:
-            return "New Folder"
+            return "新建文件夹"
         case .markdownFile:
-            return "New Markdown File"
+            return "新建 Markdown 文件"
         }
     }
 
     var placeholder: String {
         switch self {
         case .folder:
-            return "Folder name"
+            return "文件夹名称"
         case .markdownFile:
-            return "File name"
+            return "文件名称"
         }
     }
 }
@@ -531,7 +531,7 @@ private struct MarkdownEditorView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 40, weight: .semibold))
                             .foregroundStyle(.orange)
-                        Text("Unable to Edit")
+                        Text("无法编辑")
                             .font(.title3.weight(.bold))
                         Text(errorMessage)
                             .font(.callout)
@@ -583,7 +583,7 @@ private struct MarkdownEditorView: View {
                             ProgressView()
                                 .controlSize(.small)
                         } else {
-                            Label("Save", systemImage: "checkmark")
+                            Label("保存", systemImage: "checkmark")
                                 .labelStyle(.titleAndIcon)
                                 .font(.headline)
                         }
@@ -602,7 +602,7 @@ private struct MarkdownEditorView: View {
             let data = try Data(contentsOf: url)
             guard let content = String(data: data, encoding: .utf8) ??
                     String(data: data, encoding: .unicode) else {
-                errorMessage = "The file encoding is not supported."
+                errorMessage = "不支持该文件编码。"
                 isLoading = false
                 return
             }
@@ -621,7 +621,7 @@ private struct MarkdownEditorView: View {
 
         do {
             guard let data = text.data(using: .utf8) else {
-                errorMessage = "The file encoding is not supported."
+                errorMessage = "不支持该文件编码。"
                 return
             }
             try data.write(to: url, options: .atomic)
@@ -886,7 +886,7 @@ private struct MarkdownPreviewView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 40, weight: .semibold))
                             .foregroundStyle(.orange)
-                        Text("Unable to Preview")
+                        Text("无法预览")
                             .font(.title3.weight(.bold))
                         Text(errorMessage)
                             .font(.callout)
@@ -901,7 +901,7 @@ private struct MarkdownPreviewView: View {
                         Image(systemName: "doc.text")
                             .font(.system(size: 38, weight: .semibold))
                             .foregroundStyle(.secondary)
-                        Text("Empty Markdown File")
+                        Text("空 Markdown 文件")
                             .font(.headline)
                             .foregroundStyle(.secondary)
                     }
@@ -935,7 +935,7 @@ private struct MarkdownPreviewView: View {
             let data = try Data(contentsOf: url)
             guard let content = String(data: data, encoding: .utf8) ??
                     String(data: data, encoding: .unicode) else {
-                errorMessage = "The file encoding is not supported."
+                errorMessage = "不支持该文件编码。"
                 isLoading = false
                 return
             }

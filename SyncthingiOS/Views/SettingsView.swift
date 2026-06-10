@@ -24,21 +24,21 @@ struct SettingsView: View {
                 .padding(.bottom, 26)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Settings")
+            .navigationTitle("设置")
             .navigationBarTitleDisplayMode(.large)
             .onAppear {
                 draftBaseURL = settings.baseURLString
                 draftAPIKey = settings.apiKey
             }
             .confirmationDialog(
-                "Restart Syncthing?",
+                "重启 Syncthing？",
                 isPresented: $isRestartConfirmationPresented,
                 titleVisibility: .visible
             ) {
-                Button("Restart", role: .destructive) {
+                Button("重启", role: .destructive) {
                     Task { await store.restart() }
                 }
-                Button("Cancel", role: .cancel) {}
+                Button("取消", role: .cancel) {}
             }
         }
     }
@@ -72,11 +72,11 @@ struct SettingsView: View {
 
     private var connectionForm: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Connection")
+            Text("连接")
                 .font(.title3.weight(.bold))
 
             inputBlock(
-                title: "GUI address",
+                title: "GUI 地址",
                 systemImage: "network",
                 placeholder: "http://172.20.10.2:8384",
                 text: $draftBaseURL,
@@ -84,15 +84,15 @@ struct SettingsView: View {
             )
 
             inputBlock(
-                title: "API key",
+                title: "API Key",
                 systemImage: "key.fill",
-                placeholder: "Syncthing API key",
+                placeholder: "Syncthing API Key",
                 text: $draftAPIKey,
                 isSecure: true
             )
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Target URL")
+                Text("目标 URL")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Text(normalizedDraftBaseURLString)
@@ -108,7 +108,7 @@ struct SettingsView: View {
             Button {
                 saveAndConnect()
             } label: {
-                Label("Save & Connect", systemImage: "bolt.horizontal.circle.fill")
+                Label("保存并连接", systemImage: "bolt.horizontal.circle.fill")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
@@ -124,7 +124,7 @@ struct SettingsView: View {
 
     private var embeddedCoreCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Embedded Core")
+            Text("内置核心")
                 .font(.title3.weight(.bold))
 
             HStack(spacing: 13) {
@@ -168,7 +168,7 @@ struct SettingsView: View {
                         } else {
                             Image(systemName: "play.fill")
                         }
-                        Text(core.state.isStarting ? "Starting" : "Start")
+                        Text(core.state.isStarting ? "启动中" : "启动")
                     }
                     .font(.headline)
                     .frame(maxWidth: .infinity)
@@ -187,7 +187,7 @@ struct SettingsView: View {
                         } else {
                             Image(systemName: "stop.fill")
                         }
-                        Text(core.state.isStopping ? "Stopping" : "Stop")
+                        Text(core.state.isStopping ? "停止中" : "停止")
                     }
                     .font(.headline)
                     .frame(maxWidth: .infinity)
@@ -204,7 +204,7 @@ struct SettingsView: View {
                 store.configure(with: settings.snapshot)
                 Task { await store.refresh() }
             } label: {
-                Label("Use Local Core API", systemImage: "link")
+                Label("使用本机核心 API", systemImage: "link")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .frame(height: 48)
@@ -218,7 +218,7 @@ struct SettingsView: View {
 
     private var syncFolderCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Sync Folder")
+            Text("同步文件夹")
                 .font(.title3.weight(.bold))
 
             HStack(spacing: 12) {
@@ -230,9 +230,9 @@ struct SettingsView: View {
                     .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("App Documents / Syncthing")
+                    Text("我的iPhone / Syncthing")
                         .font(.headline)
-                    Text("Syncthing writes only inside this app's own Documents directory.")
+                    Text("Syncthing 只会写入本应用自己的 Documents 目录。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -253,7 +253,7 @@ struct SettingsView: View {
             Button(role: .destructive) {
                 isRestartConfirmationPresented = true
             } label: {
-                Label("Restart Syncthing", systemImage: "power")
+                Label("重启 Syncthing", systemImage: "power")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .frame(height: 52)
@@ -269,9 +269,9 @@ struct SettingsView: View {
 
     private var aboutCard: some View {
         VStack(spacing: 12) {
-            infoRow("Client", value: "SwiftUI foreground core")
+            infoRow("客户端", value: "SwiftUI foreground core")
             Divider()
-            infoRow("Version", value: "0.1.0")
+            infoRow("版本", value: "0.1.0")
         }
         .padding(18)
         .background(Color(.secondarySystemGroupedBackground))
@@ -339,19 +339,19 @@ struct SettingsView: View {
     }
 
     private var statusTitle: String {
-        if store.isLoading { return "Connecting" }
-        if store.errorMessage != nil { return "Connection issue" }
-        if store.lastConnectedAt != nil { return "Connected" }
-        return "Not connected"
+        if store.isLoading { return "连接中" }
+        if store.errorMessage != nil { return "连接异常" }
+        if store.lastConnectedAt != nil { return "已连接" }
+        return "未连接"
     }
 
     private var statusSubtitle: String {
-        if store.isLoading { return "Checking the Syncthing REST API." }
+        if store.isLoading { return "正在检查 Syncthing REST API。" }
         if let errorMessage = store.errorMessage { return errorMessage }
         if let lastConnectedAt = store.lastConnectedAt {
-            return "Last connected \(lastConnectedAt.formatted(date: .omitted, time: .shortened))"
+            return "上次连接 \(lastConnectedAt.formatted(date: .omitted, time: .shortened))"
         }
-        return "Enter the GUI address and API key."
+        return "请输入 GUI 地址和 API Key。"
     }
 
     private var statusIcon: String {

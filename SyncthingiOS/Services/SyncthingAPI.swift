@@ -10,15 +10,15 @@ enum SyncthingAPIError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            return "Enter the Syncthing API key from Actions > Settings > GUI."
+            return "请填写 Syncthing API Key，可在 Actions > Settings > GUI 中查看。"
         case .invalidBaseURL:
-            return "Enter a valid Syncthing GUI address."
+            return "请输入有效的 Syncthing GUI 地址。"
         case .invalidResponse:
-            return "Syncthing returned an invalid response."
+            return "Syncthing 返回了无效响应。"
         case .decodingFailed(let details):
-            return "Syncthing returned data this app could not read: \(details)"
+            return "Syncthing 返回了应用无法读取的数据：\(details)"
         case .httpStatus(let status):
-            return "Syncthing returned HTTP \(status)."
+            return "Syncthing 返回 HTTP \(status)。"
         }
     }
 }
