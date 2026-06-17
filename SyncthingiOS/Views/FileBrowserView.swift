@@ -14,6 +14,11 @@ struct FileBrowserView: View {
     @State private var newItemName = ""
     @State private var newItemKind: NewItemKind?
     @State private var newItemErrorMessage: String?
+    @State private var renameCandidate: SharedFileEntry?
+    @State private var renameName = ""
+    @State private var renameErrorMessage: String?
+    @State private var deleteCandidate: SharedFileEntry?
+    @State private var deleteErrorMessage: String?
 
     let folderURL: URL?
 
@@ -34,40 +39,21 @@ struct FileBrowserView: View {
         folderURL != nil
     }
 
+    private var canDeleteItems: Bool {
+        folderURL != nil
+    }
+
+    private var canRenameItems: Bool {
+        folderURL != nil
+    }
+
     var body: some View {
         NavigationStack {
             content
                 .background(Color(.systemGroupedBackground))
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(folderURL == nil ? .large : .inline)
-                .toolbar {
-                    ToolbarItemGroup(placement: .topBarTrailing) {
-                        if canCreateItems {
-                            Menu {
-                                Button {
-                                    beginCreating(.folder)
-                                } label: {
-                                    Label("文件夹", systemImage: "folder.badge.plus")
-                                }
-
-                                Button {
-                                    beginCreating(.markdownFile)
-                                } label: {
-                                    Label("Markdown 文件", systemImage: "doc.badge.plus")
-                                }
-                            } label: {
-                                Image(systemName: "plus")
-                            }
-                            .accessibilityLabel("新建")
-                        }
-
-                        Button {
-                            loadEntries()
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                        }
-                    }
-                }
+                .toolbar { browserToolbar }
                 .onAppear(perform: loadEntries)
                 .quickLookPreview($previewURL)
                 .sheet(item: $shareItem) { item in
@@ -79,23 +65,61 @@ struct FileBrowserView: View {
                 .sheet(item: $markdownEditorItem, onDismiss: loadEntries) { item in
                     MarkdownEditorView(url: item.url)
                 }
-                .alert(newItemKind?.title ?? "新建", isPresented: newItemAlertBinding) {
-                    TextField(newItemKind?.placeholder ?? "名称", text: $newItemName)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    Button("取消", role: .cancel) {
-                        resetNewItemInput()
+                .modifier(NewItemAlerts(
+                    kind: newItemKind,
+                    name: $newItemName,
+                    isCreating: newItemAlertBinding,
+                    errorMessage: newItemErrorMessage,
+                    isErrorPresented: newItemErrorBinding,
+                    onCancel: resetNewItemInput,
+                    onCreate: submitNewItem
+                ))
+                .modifier(RenameItemAlerts(
+                    candidate: $renameCandidate,
+                    name: $renameName,
+                    isRenaming: renameAlertBinding,
+                    errorMessage: renameErrorMessage,
+                    isErrorPresented: renameErrorBinding,
+                    onCancel: resetRenameInput,
+                    onRename: submitRename
+                ))
+                .modifier(DeleteItemAlerts(
+                    candidate: $deleteCandidate,
+                    isDeleteConfirmationPresented: deleteConfirmationBinding,
+                    errorMessage: deleteErrorMessage,
+                    isErrorPresented: deleteErrorBinding,
+                    onDelete: delete
+                ))
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var browserToolbar: some ToolbarContent {
+        ToolbarItemGroup(placement: .topBarTrailing) {
+            if canCreateItems {
+                Menu {
+                    Button {
+                        beginCreating(.folder)
+                    } label: {
+                        Label("文件夹", systemImage: "folder.badge.plus")
                     }
-                    Button("创建") {
-                        submitNewItem()
+
+                    Button {
+                        beginCreating(.markdownFile)
+                    } label: {
+                        Label("Markdown 文件", systemImage: "doc.badge.plus")
                     }
-                    .disabled(newItemName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                } label: {
+                    Image(systemName: "plus")
                 }
-                .alert("无法创建", isPresented: newItemErrorBinding) {
-                    Button("好", role: .cancel) {}
-                } message: {
-                    Text(newItemErrorMessage ?? "")
-                }
+                .accessibilityLabel("新建")
+            }
+
+            Button {
+                loadEntries()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+            }
         }
     }
 
@@ -115,6 +139,46 @@ struct FileBrowserView: View {
         } set: { isPresented in
             if !isPresented {
                 newItemErrorMessage = nil
+            }
+        }
+    }
+
+    private var renameAlertBinding: Binding<Bool> {
+        Binding {
+            renameCandidate != nil
+        } set: { isPresented in
+            if !isPresented {
+                resetRenameInput()
+            }
+        }
+    }
+
+    private var renameErrorBinding: Binding<Bool> {
+        Binding {
+            renameErrorMessage != nil
+        } set: { isPresented in
+            if !isPresented {
+                renameErrorMessage = nil
+            }
+        }
+    }
+
+    private var deleteErrorBinding: Binding<Bool> {
+        Binding {
+            deleteErrorMessage != nil
+        } set: { isPresented in
+            if !isPresented {
+                deleteErrorMessage = nil
+            }
+        }
+    }
+
+    private var deleteConfirmationBinding: Binding<Bool> {
+        Binding {
+            deleteCandidate != nil
+        } set: { isPresented in
+            if !isPresented {
+                deleteCandidate = nil
             }
         }
     }
@@ -157,6 +221,12 @@ struct FileBrowserView: View {
                 } label: {
                     rowContent(entry)
                 }
+                .modifier(FileActionSwipeActions(
+                    entry: entry,
+                    isEnabled: canRenameItems || canDeleteItems,
+                    onRename: beginRenaming,
+                    onDelete: { deleteCandidate = $0 }
+                ))
             } else {
                 HStack(spacing: 10) {
                     Button {
@@ -180,34 +250,12 @@ struct FileBrowserView: View {
                         .accessibilityLabel("编辑")
                     }
                 }
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button {
-                        shareItem = ShareItem(url: entry.url)
-                    } label: {
-                        Label("分享", systemImage: "square.and.arrow.up")
-                    }
-                }
-                .contextMenu {
-                    Button {
-                        open(entry)
-                    } label: {
-                        Label("预览", systemImage: "doc.text.magnifyingglass")
-                    }
-
-                    Button {
-                        shareItem = ShareItem(url: entry.url)
-                    } label: {
-                        Label("分享", systemImage: "square.and.arrow.up")
-                    }
-
-                    if entry.isMarkdown {
-                        Button {
-                            markdownEditorItem = MarkdownItem(url: entry.url)
-                        } label: {
-                            Label("编辑", systemImage: "pencil")
-                        }
-                    }
-                }
+                .modifier(FileActionSwipeActions(
+                    entry: entry,
+                    isEnabled: canRenameItems || canDeleteItems,
+                    onRename: beginRenaming,
+                    onDelete: { deleteCandidate = $0 }
+                ))
             }
         }
     }
@@ -331,6 +379,90 @@ struct FileBrowserView: View {
         loadEntries()
     }
 
+    private func rename(_ entry: SharedFileEntry, to rawName: String) {
+        do {
+            try renameItem(entry, to: rawName)
+            loadEntries()
+        } catch {
+            renameErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func renameItem(_ entry: SharedFileEntry, to rawName: String) throws {
+        guard canRenameItems else {
+            throw FileOperationError("顶层目录不支持重命名。")
+        }
+        guard let currentURL else {
+            throw FileOperationError("当前文件夹不可用。")
+        }
+
+        let name = normalizedRenameName(rawName, for: entry)
+        guard !name.isEmpty else {
+            throw FileOperationError("名称不能为空。")
+        }
+        guard !name.contains("/") && !name.contains(":") else {
+            throw FileOperationError("名称不能包含路径分隔符。")
+        }
+        guard name != entry.name else { return }
+
+        let parentPath = currentURL.standardizedFileURL.path
+        let sourceURL = entry.url.standardizedFileURL
+        guard sourceURL.deletingLastPathComponent().path == parentPath else {
+            throw FileOperationError("只能重命名当前文件夹内的项目。")
+        }
+
+        let targetURL = currentURL
+            .appendingPathComponent(name, isDirectory: entry.isDirectory)
+            .standardizedFileURL
+        guard !FileManager.default.fileExists(atPath: targetURL.path) else {
+            throw FileOperationError("同名项目已存在。")
+        }
+
+        try FileManager.default.moveItem(at: sourceURL, to: targetURL)
+    }
+
+    private func delete(_ entry: SharedFileEntry) {
+        do {
+            try deleteItem(entry)
+            loadEntries()
+        } catch {
+            deleteErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func deleteItem(_ entry: SharedFileEntry) throws {
+        guard canDeleteItems else {
+            throw FileOperationError("顶层目录不支持删除。")
+        }
+        guard let currentURL else {
+            throw FileOperationError("当前文件夹不可用。")
+        }
+
+        let parentPath = currentURL.standardizedFileURL.path
+        let targetURL = entry.url.standardizedFileURL
+        guard targetURL.deletingLastPathComponent().path == parentPath else {
+            throw FileOperationError("只能删除当前文件夹内的项目。")
+        }
+
+        try FileManager.default.removeItem(at: targetURL)
+    }
+
+    private func beginRenaming(_ entry: SharedFileEntry) {
+        renameName = editableRenameName(for: entry)
+        renameCandidate = entry
+    }
+
+    private func submitRename() {
+        guard let renameCandidate else { return }
+        rename(renameCandidate, to: renameName)
+        resetRenameInput()
+    }
+
+    private func resetRenameInput() {
+        renameName = ""
+        renameCandidate = nil
+    }
+
     private func beginCreating(_ kind: NewItemKind) {
         newItemName = ""
         newItemKind = kind
@@ -354,10 +486,31 @@ struct FileBrowserView: View {
 
     private func normalizedName(_ rawName: String, kind: NewItemKind) -> String {
         var name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if kind == .markdownFile && !name.lowercased().hasSuffix(".md") {
+        if kind == .markdownFile && !hasMarkdownExtension(name) {
             name += ".md"
         }
         return name
+    }
+
+    private func normalizedRenameName(_ rawName: String, for entry: SharedFileEntry) -> String {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if entry.isMarkdown {
+            guard !name.isEmpty else { return "" }
+            return name + "." + entry.url.pathExtension
+        }
+        return name
+    }
+
+    private func editableRenameName(for entry: SharedFileEntry) -> String {
+        if entry.isMarkdown {
+            return entry.url.deletingPathExtension().lastPathComponent
+        }
+        return entry.name
+    }
+
+    private func hasMarkdownExtension(_ name: String) -> Bool {
+        let lowercasedName = name.lowercased()
+        return lowercasedName.hasSuffix(".md") || lowercasedName.hasSuffix(".markdown")
     }
 }
 
@@ -386,7 +539,127 @@ private enum NewItemKind: String, Identifiable {
     }
 }
 
-private struct NewItemError: LocalizedError {
+private struct NewItemAlerts: ViewModifier {
+    let kind: NewItemKind?
+    @Binding var name: String
+    let isCreating: Binding<Bool>
+    let errorMessage: String?
+    let isErrorPresented: Binding<Bool>
+    let onCancel: () -> Void
+    let onCreate: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .alert(kind?.title ?? "新建", isPresented: isCreating) {
+                TextField(kind?.placeholder ?? "名称", text: $name)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button("取消", role: .cancel) {
+                    onCancel()
+                }
+                Button("创建") {
+                    onCreate()
+                }
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .alert("无法创建", isPresented: isErrorPresented) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
+    }
+}
+
+private struct RenameItemAlerts: ViewModifier {
+    @Binding var candidate: SharedFileEntry?
+    @Binding var name: String
+    let isRenaming: Binding<Bool>
+    let errorMessage: String?
+    let isErrorPresented: Binding<Bool>
+    let onCancel: () -> Void
+    let onRename: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .alert("重命名", isPresented: isRenaming) {
+                TextField("名称", text: $name)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button("取消", role: .cancel) {
+                    onCancel()
+                }
+                Button("保存") {
+                    onRename()
+                }
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            } message: {
+                Text(candidate?.name ?? "")
+            }
+            .alert("无法重命名", isPresented: isErrorPresented) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
+    }
+}
+
+private struct DeleteItemAlerts: ViewModifier {
+    @Binding var candidate: SharedFileEntry?
+    let isDeleteConfirmationPresented: Binding<Bool>
+    let errorMessage: String?
+    let isErrorPresented: Binding<Bool>
+    let onDelete: (SharedFileEntry) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .alert("删除项目？", isPresented: isDeleteConfirmationPresented) {
+                Button("取消", role: .cancel) {}
+                Button("删除", role: .destructive) {
+                    if let candidate {
+                        onDelete(candidate)
+                    }
+                }
+            } message: {
+                Text("将删除“\(candidate?.name ?? "")”。此操作不可撤销。")
+            }
+            .alert("无法删除", isPresented: isErrorPresented) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
+    }
+}
+
+private struct FileActionSwipeActions: ViewModifier {
+    let entry: SharedFileEntry
+    let isEnabled: Bool
+    let onRename: (SharedFileEntry) -> Void
+    let onDelete: (SharedFileEntry) -> Void
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                    Button(role: .destructive) {
+                        onDelete(entry)
+                    } label: {
+                        Label("删除", systemImage: "trash")
+                    }
+
+                    Button {
+                        onRename(entry)
+                    } label: {
+                        Label("重命名", systemImage: "pencil")
+                    }
+                    .tint(.blue)
+                }
+        } else {
+            content
+        }
+    }
+}
+
+private struct FileOperationError: LocalizedError {
     let message: String
 
     init(_ message: String) {
@@ -397,6 +670,8 @@ private struct NewItemError: LocalizedError {
         message
     }
 }
+
+private typealias NewItemError = FileOperationError
 
 private struct SharedFileEntry: Identifiable, Comparable {
     let id: URL

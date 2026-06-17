@@ -17,6 +17,8 @@ struct SettingsView: View {
                     syncFolderCard
                     connectionForm
                     syncthingActions
+                    appStoreReadinessCard
+                    openSourceCard
                     aboutCard
                 }
                 .padding(.horizontal, 20)
@@ -267,6 +269,56 @@ struct SettingsView: View {
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
+    private var appStoreReadinessCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("上架说明")
+                .font(.title3.weight(.bold))
+
+            complianceRow(
+                systemImage: "info.circle.fill",
+                title: "非官方客户端",
+                message: "本应用不是 Syncthing 官方产品，Syncthing 名称归其项目所有。"
+            )
+            complianceRow(
+                systemImage: "iphone.and.arrow.forward",
+                title: "前台同步",
+                message: "同步核心在应用前台运行；切到后台后，iOS 可能暂停网络同步。"
+            )
+            complianceRow(
+                systemImage: "network",
+                title: "本地网络",
+                message: "连接局域网设备时，系统会请求本地网络访问权限。"
+            )
+        }
+        .padding(18)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private var openSourceCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("开源许可证")
+                .font(.title3.weight(.bold))
+
+            complianceRow(
+                systemImage: "doc.text.fill",
+                title: "Syncthing",
+                message: "Syncthing core 使用 MPL 2.0 许可证。"
+            )
+            complianceRow(
+                systemImage: "curlybraces",
+                title: "Markdown 组件",
+                message: "CodeMirror 与 marked 使用 MIT 许可证。"
+            )
+            Text("正式上架前需要在 App 内提供完整许可证文本和源码链接。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(18)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
     private var aboutCard: some View {
         VStack(spacing: 12) {
             infoRow("客户端", value: "SwiftUI foreground core")
@@ -317,6 +369,26 @@ struct SettingsView: View {
                 .multilineTextAlignment(.trailing)
         }
         .font(.callout)
+    }
+
+    private func complianceRow(systemImage: String, title: String, message: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: systemImage)
+                .font(.headline)
+                .foregroundStyle(.blue)
+                .frame(width: 28, height: 28)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.callout.weight(.semibold))
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
     }
 
     private var canSave: Bool {

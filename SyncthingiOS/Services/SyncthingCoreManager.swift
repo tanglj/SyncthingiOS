@@ -70,11 +70,7 @@ final class SyncthingCoreManager: ObservableObject {
     static let localBaseURLString = "http://127.0.0.1:8384"
     static let localAPIKey = "ios-local-syncthing-core"
 
-    @Published private(set) var state: SyncthingCoreState = .stopped {
-        didSet {
-            writeDebugStatus()
-        }
-    }
+    @Published private(set) var state: SyncthingCoreState = .stopped
     private var startSequence = 0
     private var activeSyncRootURL: URL?
 
@@ -89,9 +85,7 @@ final class SyncthingCoreManager: ObservableObject {
         try? localSyncRootURL()
     }
 
-    init() {
-        writeDebugStatus()
-    }
+    init() {}
 
     func start() async {
         #if canImport(Ioscore)
@@ -189,37 +183,6 @@ final class SyncthingCoreManager: ObservableObject {
         return documentsURL.appendingPathComponent("Syncthing", isDirectory: true)
     }
 
-    private func writeDebugStatus() {
-        do {
-            let documentsURL = try FileManager.default.url(
-                for: .documentDirectory,
-                in: .userDomainMask,
-                appropriateFor: nil,
-                create: true
-            )
-            let url = documentsURL.appendingPathComponent("CoreStatus.json")
-            var payload: [String: Any] = [
-                "stateTitle": state.title,
-                "stateMessage": state.message,
-                "updatedAt": ISO8601DateFormatter().string(from: Date()),
-                "localBaseURL": Self.localBaseURLString,
-                "syncRoot": (activeSyncRootURL ?? (try? localSyncRootURL()))?.path ?? ""
-            ]
-
-            #if canImport(Ioscore)
-            payload["bridgeStatus"] = IoscoreStatus()
-            payload["bridgeIsStarting"] = IoscoreIsStarting()
-            payload["bridgeIsRunning"] = IoscoreIsRunning()
-            payload["bridgePing"] = IoscorePing()
-            payload["bridgeLastError"] = IoscoreLastError()
-            #endif
-
-            let data = try JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys])
-            try data.write(to: url, options: .atomic)
-        } catch {
-            // Debug status is best-effort and should never affect app behavior.
-        }
-    }
 }
 
 private enum SyncthingCoreManagerError: LocalizedError {

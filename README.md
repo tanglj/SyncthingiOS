@@ -8,6 +8,9 @@
 本机 Syncthing core，提供状态查看、Web GUI、共享文件浏览和 Markdown
 文件编辑能力。
 
+当前 App 显示名使用 `SyncCore`，避免与 Syncthing 官方客户端产生混淆。此项目
+不是 Syncthing 官方产品。
+
 ## 当前功能
 
 - 在应用前台运行内置 Syncthing core。
@@ -148,3 +151,4 @@ xcrun devicectl device process launch \
 - Web GUI、Markdown 预览和 Markdown 编辑使用 WebKit。
 - 底部菜单仍保留英文标题，其它应用界面文案使用中文。
 - README 修改需保持中文。
+
