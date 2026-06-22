@@ -8,7 +8,7 @@
 本机 Syncthing core，提供状态查看、Web GUI、共享文件浏览和 Markdown
 文件编辑能力。
 
-当前 App 显示名使用 `SyncCore`，避免与 Syncthing 官方客户端产生混淆。此项目
+当前 App 显示名使用 `Sync Client`，避免与 Syncthing 官方客户端产生混淆。此项目
 不是 Syncthing 官方产品。
 
 ## 当前功能

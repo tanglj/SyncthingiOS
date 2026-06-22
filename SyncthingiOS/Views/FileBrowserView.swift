@@ -1228,6 +1228,10 @@ private struct MarkdownWebPreview: UIViewRepresentable {
     let baseURL: URL
     let title: String
 
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
     func makeUIView(context: Context) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
@@ -1239,13 +1243,54 @@ private struct MarkdownWebPreview: UIViewRepresentable {
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
-        webView.loadHTMLString(MarkdownHTMLDocument.make(markdown: markdown, title: title), baseURL: baseURL)
+        let html = MarkdownHTMLDocument.make(markdown: markdown, title: title, baseURL: baseURL)
+        context.coordinator.load(html: html, baseURL: baseURL, in: webView)
+    }
+
+    final class Coordinator: NSObject {
+        private var temporaryURL: URL?
+
+        func load(html: String, baseURL: URL, in webView: WKWebView) {
+            do {
+                let previewURL = try writePreviewHTML(html)
+                temporaryURL = previewURL
+                webView.loadFileURL(previewURL, allowingReadAccessTo: previewURL.deletingLastPathComponent())
+            } catch {
+                webView.loadHTMLString(html, baseURL: baseURL)
+            }
+        }
+
+        private func writePreviewHTML(_ html: String) throws -> URL {
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("SyncClientMarkdownPreview", isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let url = directory.appendingPathComponent(UUID().uuidString).appendingPathExtension("html")
+            try html.write(to: url, atomically: true, encoding: .utf8)
+
+            if let temporaryURL, temporaryURL != url {
+                try? FileManager.default.removeItem(at: temporaryURL)
+            }
+
+            return url
+        }
+
+        func cleanup() {
+            if let temporaryURL {
+                try? FileManager.default.removeItem(at: temporaryURL)
+            }
+            temporaryURL = nil
+        }
+    }
+
+    static func dismantleUIView(_ uiView: WKWebView, coordinator: Coordinator) {
+        uiView.stopLoading()
+        coordinator.cleanup()
     }
 }
 
 private enum MarkdownHTMLDocument {
-    static func make(markdown: String, title: String) -> String {
-        let encodedMarkdown = jsonString(markdown)
+    static func make(markdown: String, title: String, baseURL: URL) -> String {
+        let encodedMarkdown = jsonString(markdownWithEmbeddedLocalImages(markdown, baseURL: baseURL))
         let encodedTitle = jsonString(title)
         let markedScript = bundledMarkedScript()
         return """
@@ -1388,6 +1433,94 @@ private enum MarkdownHTMLDocument {
         </body>
         </html>
         """
+    }
+
+    private static func markdownWithEmbeddedLocalImages(_ markdown: String, baseURL: URL) -> String {
+        var result = ""
+        var cursor = markdown.startIndex
+
+        while let imageStart = markdown[cursor...].range(of: "![")?.lowerBound {
+            guard let labelEnd = markdown[imageStart...].firstIndex(of: "]") else { break }
+            let openParen = markdown.index(after: labelEnd)
+            guard openParen < markdown.endIndex, markdown[openParen] == "(",
+                  let closeParen = markdown[openParen...].firstIndex(of: ")") else {
+                cursor = markdown.index(after: imageStart)
+                continue
+            }
+
+            let destinationStart = markdown.index(after: openParen)
+            let rawDestination = String(markdown[destinationStart..<closeParen])
+            guard let embeddedDestination = embeddedImageDestination(rawDestination, baseURL: baseURL) else {
+                cursor = markdown.index(after: imageStart)
+                continue
+            }
+
+            result += markdown[cursor..<destinationStart]
+            result += embeddedDestination
+            cursor = closeParen
+        }
+
+        result += markdown[cursor...]
+        return result
+    }
+
+    private static func embeddedImageDestination(_ rawDestination: String, baseURL: URL) -> String? {
+        let trimmed = rawDestination.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              !trimmed.hasPrefix("#"),
+              !trimmed.hasPrefix("//"),
+              !trimmed.contains(where: { $0.isWhitespace }),
+              trimmed.range(of: #"^[A-Za-z][A-Za-z0-9+.-]*:"#, options: .regularExpression) == nil,
+              !trimmed.hasPrefix("/") else {
+            return nil
+        }
+
+        let pathOnly = trimmed.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)[0]
+            .split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)[0]
+        guard !pathOnly.isEmpty,
+              let decodedPath = String(pathOnly).removingPercentEncoding else {
+            return nil
+        }
+
+        let resourceURL = baseURL
+            .appendingPathComponent(decodedPath)
+            .standardizedFileURL
+        guard isReadableImageResource(resourceURL, under: baseURL),
+              let data = try? Data(contentsOf: resourceURL) else {
+            return nil
+        }
+
+        return "data:\(mimeType(for: resourceURL));base64,\(data.base64EncodedString())"
+    }
+
+    private static func isReadableImageResource(_ url: URL, under baseURL: URL) -> Bool {
+        let basePath = baseURL.standardizedFileURL.path
+        let resourcePath = url.standardizedFileURL.path
+        guard resourcePath.hasPrefix(basePath + "/"),
+              supportedImageExtensions.contains(url.pathExtension.lowercased()) else {
+            return false
+        }
+
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: resourcePath, isDirectory: &isDirectory) && !isDirectory.boolValue
+    }
+
+    private static let supportedImageExtensions: Set<String> = [
+        "apng", "avif", "gif", "heic", "heif", "jpg", "jpeg", "png", "svg", "webp"
+    ]
+
+    private static func mimeType(for url: URL) -> String {
+        switch url.pathExtension.lowercased() {
+        case "apng": return "image/apng"
+        case "avif": return "image/avif"
+        case "gif": return "image/gif"
+        case "heic", "heif": return "image/heic"
+        case "jpg", "jpeg": return "image/jpeg"
+        case "png": return "image/png"
+        case "svg": return "image/svg+xml"
+        case "webp": return "image/webp"
+        default: return "application/octet-stream"
+        }
     }
 
     private static func bundledMarkedScript() -> String {
