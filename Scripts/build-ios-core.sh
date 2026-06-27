@@ -3,12 +3,11 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-WORKSPACE_ROOT="$(cd "$APP_ROOT/.." && pwd)"
-SYNCTHING_ROOT="$WORKSPACE_ROOT/syncthing"
+SYNCTHING_ROOT="$APP_ROOT/ThirdParty"
 
-GOBIN="$WORKSPACE_ROOT/.gobin"
-GOCACHE="$WORKSPACE_ROOT/.gocache"
-GOMODCACHE="$WORKSPACE_ROOT/.gomodcache"
+GOBIN="$APP_ROOT/.gobin"
+GOCACHE="$APP_ROOT/.gocache"
+GOMODCACHE="$APP_ROOT/.gomodcache"
 GOMOBILE="$GOBIN/gomobile"
 OUT_DIR="$APP_ROOT/SyncthingiOS/Frameworks"
 

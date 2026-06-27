@@ -1,8 +1,8 @@
 # Syncthing iOS
 
 这是一个基于 SwiftUI 的 Syncthing iOS 客户端，参考了
-`../syncthing-android` 的客户端组织方式，并直接使用 `../syncthing`
-中的 Syncthing core 与 REST API。
+Syncthing Android 的客户端组织方式，并直接使用本项目内
+`ThirdParty` 目录中的 Syncthing core 与 REST API。
 
 当前目标是“嵌入 Syncthing core 的前台可用版”：应用在前台运行时启动
 本机 Syncthing core，提供状态查看、Web GUI、共享文件浏览和 Markdown
@@ -81,7 +81,7 @@ Markdown 编辑器基于本地打包的 CodeMirror 资源：
 前台版的关键模块：
 
 - Swift 生命周期管理：`SyncthingCoreManager`
-- Go 桥接层：`../syncthing/mobile/ioscore`
+- Go 桥接层：`ThirdParty/mobile/ioscore`
 - 本机 API Key：`ios-local-syncthing-core`
 - 本机 GUI/API：`http://127.0.0.1:8384`
 
@@ -99,6 +99,10 @@ SyncthingiOS/Frameworks/Ioscore.xcframework
 
 脚本会向 gomobile 构建注入 Syncthing 版本号，避免 Web GUI 版本字段显示
 `unknown-dev`。重新生成 framework 后需要重新构建并安装 App。
+
+Syncthing core 源码已随项目放在 `ThirdParty` 目录中，构建内置 core 不再依赖
+父目录中的 `../syncthing`。脚本使用项目内的 `.gobin`、`.gocache` 和
+`.gomodcache` 目录缓存 Go 工具与模块。
 
 ## 构建验证
 

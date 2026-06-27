@@ -1,5 +1,8 @@
 .derivedData/
 .derivedData-device/
+.gobin/
+.gocache/
+.gomodcache/
 DerivedData/
 build/
 xcuserdata/
