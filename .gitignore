@@ -5,6 +5,7 @@
 .gomodcache/
 DerivedData/
 build/
+SyncthingiOS/Frameworks/Ioscore.xcframework/
 xcuserdata/
 *.xcodeproj/project.xcworkspace/
 *.xcuserstate
