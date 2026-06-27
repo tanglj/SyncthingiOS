@@ -155,4 +155,3 @@ xcrun devicectl device process launch \
 - Web GUI、Markdown 预览和 Markdown 编辑使用 WebKit。
 - 底部菜单仍保留英文标题，其它应用界面文案使用中文。
 - README 修改需保持中文。
-
