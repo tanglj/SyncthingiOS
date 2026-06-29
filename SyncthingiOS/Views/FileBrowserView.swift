@@ -5,6 +5,31 @@ import WebKit
 
 struct FileBrowserView: View {
     @EnvironmentObject private var core: SyncthingCoreManager
+    @State private var path: [URL] = []
+    @State private var didRestorePath = false
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            FileBrowserDirectoryView(folderURL: nil)
+                .navigationDestination(for: URL.self) { folderURL in
+                    FileBrowserDirectoryView(folderURL: folderURL)
+                }
+        }
+        .onAppear(perform: restorePathIfNeeded)
+        .onChange(of: path) { _, newPath in
+            FileBrowserPathStore.save(folderURL: newPath.last, syncRootURL: core.syncRootURL)
+        }
+    }
+
+    private func restorePathIfNeeded() {
+        guard !didRestorePath else { return }
+        didRestorePath = true
+        path = FileBrowserPathStore.restoredPath(syncRootURL: core.syncRootURL)
+    }
+}
+
+private struct FileBrowserDirectoryView: View {
+    @EnvironmentObject private var core: SyncthingCoreManager
     @State private var entries: [SharedFileEntry] = []
     @State private var errorMessage: String?
     @State private var previewURL: URL?
@@ -19,10 +44,12 @@ struct FileBrowserView: View {
     @State private var renameErrorMessage: String?
     @State private var deleteCandidate: SharedFileEntry?
     @State private var deleteErrorMessage: String?
+    @State private var moveCandidate: SharedFileEntry?
+    @State private var moveErrorMessage: String?
 
     let folderURL: URL?
 
-    init(folderURL: URL? = nil) {
+    init(folderURL: URL?) {
         self.folderURL = folderURL
     }
 
@@ -47,50 +74,69 @@ struct FileBrowserView: View {
         folderURL != nil
     }
 
+    private var canMoveItems: Bool {
+        folderURL != nil
+    }
+
     var body: some View {
-        NavigationStack {
-            content
-                .background(Color(.systemGroupedBackground))
-                .navigationTitle(title)
-                .navigationBarTitleDisplayMode(folderURL == nil ? .large : .inline)
-                .toolbar { browserToolbar }
-                .onAppear(perform: loadEntries)
-                .quickLookPreview($previewURL)
-                .sheet(item: $shareItem) { item in
-                    ActivityView(activityItems: [item.url])
-                }
-                .sheet(item: $markdownPreviewItem, onDismiss: loadEntries) { item in
-                    MarkdownPreviewView(url: item.url)
-                }
-                .sheet(item: $markdownEditorItem, onDismiss: loadEntries) { item in
-                    MarkdownEditorView(url: item.url)
-                }
-                .modifier(NewItemAlerts(
-                    kind: newItemKind,
-                    name: $newItemName,
-                    isCreating: newItemAlertBinding,
-                    errorMessage: newItemErrorMessage,
-                    isErrorPresented: newItemErrorBinding,
-                    onCancel: resetNewItemInput,
-                    onCreate: submitNewItem
-                ))
-                .modifier(RenameItemAlerts(
-                    candidate: $renameCandidate,
-                    name: $renameName,
-                    isRenaming: renameAlertBinding,
-                    errorMessage: renameErrorMessage,
-                    isErrorPresented: renameErrorBinding,
-                    onCancel: resetRenameInput,
-                    onRename: submitRename
-                ))
-                .modifier(DeleteItemAlerts(
-                    candidate: $deleteCandidate,
-                    isDeleteConfirmationPresented: deleteConfirmationBinding,
-                    errorMessage: deleteErrorMessage,
-                    isErrorPresented: deleteErrorBinding,
-                    onDelete: delete
-                ))
-        }
+        content
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(folderURL == nil ? .large : .inline)
+            .toolbar { browserToolbar }
+            .onAppear(perform: loadEntries)
+            .quickLookPreview($previewURL)
+            .sheet(item: $shareItem) { item in
+                ActivityView(activityItems: [item.url])
+            }
+            .sheet(item: $markdownPreviewItem, onDismiss: loadEntries) { item in
+                MarkdownPreviewView(url: item.url)
+            }
+            .sheet(item: $markdownEditorItem, onDismiss: loadEntries) { item in
+                MarkdownEditorView(url: item.url)
+            }
+            .modifier(NewItemAlerts(
+                kind: newItemKind,
+                name: $newItemName,
+                isCreating: newItemAlertBinding,
+                errorMessage: newItemErrorMessage,
+                isErrorPresented: newItemErrorBinding,
+                onCancel: resetNewItemInput,
+                onCreate: submitNewItem
+            ))
+            .modifier(RenameItemAlerts(
+                candidate: $renameCandidate,
+                name: $renameName,
+                isRenaming: renameAlertBinding,
+                errorMessage: renameErrorMessage,
+                isErrorPresented: renameErrorBinding,
+                onCancel: resetRenameInput,
+                onRename: submitRename
+            ))
+            .modifier(DeleteItemAlerts(
+                candidate: $deleteCandidate,
+                isDeleteConfirmationPresented: deleteConfirmationBinding,
+                errorMessage: deleteErrorMessage,
+                isErrorPresented: deleteErrorBinding,
+                onDelete: delete
+            ))
+            .sheet(item: $moveCandidate) { item in
+                MoveDestinationPicker(
+                    movingEntry: item,
+                    syncRootURL: core.syncRootURL,
+                    onCancel: {
+                        moveCandidate = nil
+                    },
+                    onMove: { destinationURL in
+                        move(item, to: destinationURL)
+                    }
+                )
+            }
+            .alert("无法移动", isPresented: moveErrorBinding) {
+                Button("好", role: .cancel) {}
+            } message: {
+                Text(moveErrorMessage ?? "")
+            }
     }
 
     @ToolbarContentBuilder
@@ -183,6 +229,16 @@ struct FileBrowserView: View {
         }
     }
 
+    private var moveErrorBinding: Binding<Bool> {
+        Binding {
+            moveErrorMessage != nil
+        } set: { isPresented in
+            if !isPresented {
+                moveErrorMessage = nil
+            }
+        }
+    }
+
     @ViewBuilder
     private var content: some View {
         if let errorMessage {
@@ -215,15 +271,13 @@ struct FileBrowserView: View {
     private func entryRow(_ entry: SharedFileEntry) -> some View {
         Group {
             if entry.isDirectory {
-                NavigationLink {
-                    FileBrowserView(folderURL: entry.url)
-                        .environmentObject(core)
-                } label: {
+                NavigationLink(value: entry.url) {
                     rowContent(entry)
                 }
                 .modifier(FileActionSwipeActions(
                     entry: entry,
-                    isEnabled: canRenameItems || canDeleteItems,
+                    isEnabled: canRenameItems || canDeleteItems || canMoveItems,
+                    onMove: beginMoving,
                     onRename: beginRenaming,
                     onDelete: { deleteCandidate = $0 }
                 ))
@@ -252,7 +306,8 @@ struct FileBrowserView: View {
                 }
                 .modifier(FileActionSwipeActions(
                     entry: entry,
-                    isEnabled: canRenameItems || canDeleteItems,
+                    isEnabled: canRenameItems || canDeleteItems || canMoveItems,
+                    onMove: beginMoving,
                     onRename: beginRenaming,
                     onDelete: { deleteCandidate = $0 }
                 ))
@@ -447,9 +502,61 @@ struct FileBrowserView: View {
         try FileManager.default.removeItem(at: targetURL)
     }
 
+    private func move(_ entry: SharedFileEntry, to destinationURL: URL) {
+        do {
+            try moveItem(entry, to: destinationURL)
+            moveCandidate = nil
+            loadEntries()
+        } catch {
+            moveCandidate = nil
+            moveErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func moveItem(_ entry: SharedFileEntry, to destinationURL: URL) throws {
+        guard canMoveItems else {
+            throw FileOperationError("顶层目录不支持移动。")
+        }
+        guard let currentURL else {
+            throw FileOperationError("当前文件夹不可用。")
+        }
+        guard let syncRootURL = core.syncRootURL?.standardizedFileURL else {
+            throw FileOperationError("同步根目录不可用。")
+        }
+
+        let parentPath = currentURL.standardizedFileURL.path
+        let sourceURL = entry.url.standardizedFileURL
+        guard sourceURL.deletingLastPathComponent().path == parentPath else {
+            throw FileOperationError("只能移动当前文件夹内的项目。")
+        }
+
+        let destinationURL = destinationURL.standardizedFileURL
+        guard MoveDestinationPolicy.isDirectory(destinationURL),
+              MoveDestinationPolicy.isInsideSyncRoot(destinationURL, syncRootURL: syncRootURL) else {
+            throw FileOperationError("请选择同步目录内的文件夹。")
+        }
+        guard MoveDestinationPolicy.canMove(entry, to: destinationURL, syncRootURL: syncRootURL) else {
+            throw FileOperationError("不能移动到当前项目或其子文件夹中。")
+        }
+
+        let targetURL = destinationURL
+            .appendingPathComponent(entry.name, isDirectory: entry.isDirectory)
+            .standardizedFileURL
+        guard targetURL.path != sourceURL.path else { return }
+        guard !FileManager.default.fileExists(atPath: targetURL.path) else {
+            throw FileOperationError("目标文件夹中已存在同名项目。")
+        }
+
+        try FileManager.default.moveItem(at: sourceURL, to: targetURL)
+    }
+
     private func beginRenaming(_ entry: SharedFileEntry) {
         renameName = editableRenameName(for: entry)
         renameCandidate = entry
+    }
+
+    private func beginMoving(_ entry: SharedFileEntry) {
+        moveCandidate = entry
     }
 
     private func submitRename() {
@@ -630,9 +737,238 @@ private struct DeleteItemAlerts: ViewModifier {
     }
 }
 
+private struct MoveDestinationPicker: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let movingEntry: SharedFileEntry
+    let syncRootURL: URL?
+    let onCancel: () -> Void
+    let onMove: (URL) -> Void
+
+    @State private var path: [URL] = []
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            MoveDestinationDirectoryView(
+                movingEntry: movingEntry,
+                directoryURL: syncRootURL,
+                syncRootURL: syncRootURL,
+                onMove: handleMove
+            )
+            .navigationDestination(for: URL.self) { directoryURL in
+                MoveDestinationDirectoryView(
+                    movingEntry: movingEntry,
+                    directoryURL: directoryURL,
+                    syncRootURL: syncRootURL,
+                    onMove: handleMove
+                )
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                Button("取消") {
+                    onCancel()
+                    dismiss()
+                }
+            }
+        }
+    }
+
+    private func handleMove(_ destinationURL: URL) {
+        onMove(destinationURL)
+        dismiss()
+    }
+}
+
+private struct MoveDestinationDirectoryView: View {
+    let movingEntry: SharedFileEntry
+    let directoryURL: URL?
+    let syncRootURL: URL?
+    let onMove: (URL) -> Void
+
+    @State private var directories: [MoveDestinationEntry] = []
+    @State private var errorMessage: String?
+
+    private var title: String {
+        guard let directoryURL, directoryURL != syncRootURL else { return "选择目标文件夹" }
+        return directoryURL.lastPathComponent
+    }
+
+    private var canMoveHere: Bool {
+        guard let directoryURL, let syncRootURL else { return false }
+        return MoveDestinationPolicy.canMove(movingEntry, to: directoryURL, syncRootURL: syncRootURL)
+    }
+
+    var body: some View {
+        content
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("移动到此处") {
+                        if let directoryURL {
+                            onMove(directoryURL)
+                        }
+                    }
+                    .disabled(!canMoveHere)
+                }
+            }
+            .onAppear(perform: loadDirectories)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let errorMessage {
+            VStack(spacing: 14) {
+                Image(systemName: "exclamationmark.folder.fill")
+                    .font(.system(size: 42, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text("无法打开文件夹")
+                    .font(.title3.weight(.bold))
+                Text(errorMessage)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                Button {
+                    loadDirectories()
+                } label: {
+                    Label("刷新", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if directories.isEmpty {
+            VStack(spacing: 14) {
+                Image(systemName: "folder")
+                    .font(.system(size: 42, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text("没有子文件夹")
+                    .font(.title3.weight(.bold))
+                Text(canMoveHere ? "可以直接移动到当前文件夹。" : "当前文件夹不能作为移动目标。")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            List {
+                Section {
+                    ForEach(directories) { entry in
+                        NavigationLink(value: entry.url) {
+                            HStack(spacing: 13) {
+                                Image(systemName: "folder.fill")
+                                    .font(.title3)
+                                    .foregroundStyle(.blue)
+                                    .frame(width: 32, height: 32)
+                                    .background(Color.blue.opacity(0.12))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                Text(entry.name)
+                                    .font(.body.weight(.medium))
+                                    .lineLimit(1)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.vertical, 5)
+                        }
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .refreshable {
+                loadDirectories()
+            }
+        }
+    }
+
+    private func loadDirectories() {
+        guard let directoryURL else {
+            directories = []
+            errorMessage = "同步根目录暂不可用。"
+            return
+        }
+
+        do {
+            let resourceKeys: Set<URLResourceKey> = [.isDirectoryKey, .isHiddenKey, .nameKey]
+            let urls = try FileManager.default.contentsOfDirectory(
+                at: directoryURL,
+                includingPropertiesForKeys: Array(resourceKeys),
+                options: [.skipsPackageDescendants]
+            )
+            directories = try urls.compactMap { url in
+                let values = try url.resourceValues(forKeys: resourceKeys)
+                guard values.isDirectory == true, values.isHidden != true else { return nil }
+                let entry = MoveDestinationEntry(url: url, name: values.name ?? url.lastPathComponent)
+                guard MoveDestinationPolicy.canBrowse(entry.url, movingEntry: movingEntry) else { return nil }
+                return entry
+            }
+            .sorted()
+            errorMessage = nil
+        } catch {
+            directories = []
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private enum MoveDestinationPolicy {
+    static func canBrowse(_ directoryURL: URL, movingEntry: SharedFileEntry) -> Bool {
+        let directoryPath = directoryURL.standardizedFileURL.path
+        let sourcePath = movingEntry.url.standardizedFileURL.path
+        if movingEntry.isDirectory {
+            return directoryPath != sourcePath && !directoryPath.hasPrefix(sourcePath + "/")
+        }
+        return true
+    }
+
+    static func canMove(_ entry: SharedFileEntry, to destinationURL: URL, syncRootURL: URL) -> Bool {
+        let destinationURL = destinationURL.standardizedFileURL
+        let sourceURL = entry.url.standardizedFileURL
+
+        guard isDirectory(destinationURL),
+              isInsideSyncRoot(destinationURL, syncRootURL: syncRootURL) else {
+            return false
+        }
+
+        let sourceParentPath = sourceURL.deletingLastPathComponent().path
+        if destinationURL.path == sourceParentPath {
+            return false
+        }
+
+        if entry.isDirectory {
+            return destinationURL.path != sourceURL.path && !destinationURL.path.hasPrefix(sourceURL.path + "/")
+        }
+        return true
+    }
+
+    static func isInsideSyncRoot(_ directoryURL: URL, syncRootURL: URL) -> Bool {
+        let directoryPath = directoryURL.standardizedFileURL.path
+        let rootPath = syncRootURL.standardizedFileURL.path
+        return directoryPath == rootPath || directoryPath.hasPrefix(rootPath + "/")
+    }
+
+    static func isDirectory(_ url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+    }
+}
+
+private struct MoveDestinationEntry: Identifiable, Comparable {
+    let url: URL
+    let name: String
+
+    var id: URL { url }
+
+    static func < (lhs: MoveDestinationEntry, rhs: MoveDestinationEntry) -> Bool {
+        lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+    }
+}
+
 private struct FileActionSwipeActions: ViewModifier {
     let entry: SharedFileEntry
     let isEnabled: Bool
+    let onMove: (SharedFileEntry) -> Void
     let onRename: (SharedFileEntry) -> Void
     let onDelete: (SharedFileEntry) -> Void
 
@@ -645,6 +981,13 @@ private struct FileActionSwipeActions: ViewModifier {
                     } label: {
                         Label("删除", systemImage: "trash")
                     }
+
+                    Button {
+                        onMove(entry)
+                    } label: {
+                        Label("移动", systemImage: "folder")
+                    }
+                    .tint(.indigo)
 
                     Button {
                         onRename(entry)
@@ -672,6 +1015,88 @@ private struct FileOperationError: LocalizedError {
 }
 
 private typealias NewItemError = FileOperationError
+
+private enum FileBrowserPathStore {
+    private static let key = "syncthing.files.lastDirectoryPath"
+
+    static func save(folderURL: URL?, syncRootURL: URL?) {
+        guard let folderURL,
+              let relativePath = relativeDirectoryPath(for: folderURL, syncRootURL: syncRootURL) else {
+            UserDefaults.standard.removeObject(forKey: key)
+            return
+        }
+        UserDefaults.standard.set(relativePath, forKey: key)
+    }
+
+    static func restoredPath(syncRootURL: URL?) -> [URL] {
+        guard let syncRootURL,
+              let storedPath = UserDefaults.standard.string(forKey: key),
+              !storedPath.isEmpty else {
+            return []
+        }
+
+        let rootURL = syncRootURL.standardizedFileURL
+        var restoredPath: [URL] = []
+        var currentURL = rootURL
+
+        for component in storedPath.split(separator: "/", omittingEmptySubsequences: true) {
+            let decodedComponent = String(component).removingPercentEncoding ?? String(component)
+            guard isValidPathComponent(decodedComponent) else {
+                break
+            }
+
+            let nextURL = currentURL.appendingPathComponent(decodedComponent, isDirectory: true).standardizedFileURL
+            guard isExistingDirectory(nextURL) else {
+                break
+            }
+
+            restoredPath.append(nextURL)
+            currentURL = nextURL
+        }
+
+        if restoredPath.isEmpty {
+            UserDefaults.standard.removeObject(forKey: key)
+        } else if let lastURL = restoredPath.last,
+                  let relativePath = relativeDirectoryPath(for: lastURL, syncRootURL: syncRootURL),
+                  relativePath != storedPath {
+            UserDefaults.standard.set(relativePath, forKey: key)
+        }
+
+        return restoredPath
+    }
+
+    private static func relativeDirectoryPath(for folderURL: URL, syncRootURL: URL?) -> String? {
+        guard let syncRootURL else { return nil }
+
+        let rootPath = syncRootURL.standardizedFileURL.path
+        let folderPath = folderURL.standardizedFileURL.path
+
+        guard folderPath != rootPath else { return nil }
+        guard folderPath.hasPrefix(rootPath + "/") else { return nil }
+
+        let relativePath = String(folderPath.dropFirst(rootPath.count + 1))
+        guard !relativePath.isEmpty,
+              relativePath.split(separator: "/", omittingEmptySubsequences: false).allSatisfy({
+                  isValidPathComponent(String($0))
+              }) else {
+            return nil
+        }
+
+        return relativePath
+            .split(separator: "/", omittingEmptySubsequences: false)
+            .map { String($0).addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }
+            .joined(separator: "/")
+    }
+
+    private static func isValidPathComponent(_ component: String) -> Bool {
+        !component.isEmpty && component != "." && component != ".." && !component.contains("/")
+    }
+
+    private static func isExistingDirectory(_ url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+    }
+}
 
 private struct SharedFileEntry: Identifiable, Comparable {
     let id: URL
