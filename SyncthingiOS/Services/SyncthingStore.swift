@@ -9,6 +9,13 @@ final class SyncthingStore: ObservableObject {
 
     private var api = SyncthingAPI(snapshot: .default)
     private var snapshot = SyncthingSnapshot.default
+    private var eventTask: Task<Void, Never>?
+    private var lastEventID: Int64 = 0
+
+    /// Set by the App when using the embedded core. When non-nil, restart
+    /// routes through stop+start instead of /rest/system/restart (which
+    /// permanently kills the in-process core).
+    var embeddedRestart: (() async -> Void)?
 
     func configure(with snapshot: SyncthingSnapshot) {
         self.snapshot = snapshot
@@ -39,6 +46,19 @@ final class SyncthingStore: ObservableObject {
     }
 
     func restart() async {
+        if let embeddedRestart {
+            isLoading = true
+            errorMessage = nil
+            defer { isLoading = false }
+            await embeddedRestart()
+            do {
+                overview = try await api.overview()
+                lastConnectedAt = Date()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            return
+        }
         await runCommand {
             try await api.restart()
         }
@@ -61,6 +81,46 @@ final class SyncthingStore: ObservableObject {
             lastConnectedAt = Date()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Event-driven refresh (P1-7)
+
+    /// Starts a long-poll loop on /rest/events. When a relevant event arrives
+    /// (state change, config saved, download complete), triggers a refresh.
+    func startEventLoop() {
+        guard isConfigured else { return }
+        eventTask?.cancel()
+        eventTask = Task { [weak self] in
+            await self?.pollEvents()
+        }
+    }
+
+    func stopEventLoop() {
+        eventTask?.cancel()
+        eventTask = nil
+    }
+
+    private func pollEvents() async {
+        while !Task.isCancelled {
+            do {
+                let events = try await api.pollEvents(since: lastEventID)
+                guard !Task.isCancelled else { break }
+                var shouldRefresh = false
+                for event in events {
+                    lastEventID = max(lastEventID, event.id)
+                    if event.shouldRefreshOverview {
+                        shouldRefresh = true
+                    }
+                }
+                if shouldRefresh {
+                    await refresh()
+                }
+            } catch {
+                // Network error or timeout — back off briefly then retry.
+                guard !Task.isCancelled else { break }
+                try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 s
+            }
         }
     }
 }

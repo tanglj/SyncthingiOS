@@ -22,6 +22,7 @@
 		0A00000D2C11210000000001 /* Ioscore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0A00001D2C11210000000001 /* Ioscore.xcframework */; };
 		0A00000E2C11210000000001 /* Ioscore.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0A00001D2C11210000000001 /* Ioscore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		0A00000F2C11210000000001 /* FileBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A00001E2C11210000000001 /* FileBrowserView.swift */; };
+		0A0000962C11210000000001 /* BackgroundSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0000972C11210000000001 /* BackgroundSyncManager.swift */; };
 		0A0000902C11210000000001 /* MarkdownPreview in Resources */ = {isa = PBXBuildFile; fileRef = 0A0000912C11210000000001 /* MarkdownPreview */; };
 		0A0000922C11210000000001 /* MarkdownEditor in Resources */ = {isa = PBXBuildFile; fileRef = 0A0000932C11210000000001 /* MarkdownEditor */; };
 		0A0000942C11210000000001 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 0A0000952C11210000000001 /* InfoPlist.strings */; };
@@ -60,6 +61,7 @@
 		0A0000912C11210000000001 /* MarkdownPreview */ = {isa = PBXFileReference; lastKnownFileType = folder; path = MarkdownPreview; sourceTree = "<group>"; };
 		0A0000932C11210000000001 /* MarkdownEditor */ = {isa = PBXFileReference; lastKnownFileType = folder; path = MarkdownEditor; sourceTree = "<group>"; };
 		0A0000952C11210000000001 /* InfoPlist.strings */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = InfoPlist.strings; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		0A0000972C11210000000001 /* BackgroundSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -120,6 +122,7 @@
 				0A0000162C11210000000001 /* SyncthingStore.swift */,
 				0A00001B2C11210000000001 /* KeychainStore.swift */,
 				0A00001C2C11210000000001 /* SyncthingCoreManager.swift */,
+				0A0000972C11210000000001 /* BackgroundSyncManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -183,7 +186,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1530;
-				LastUpgradeCheck = 2640;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					0A0000402C11210000000001 = {
 						CreatedOnToolsVersion = 15.3;
@@ -239,6 +242,7 @@
 				0A0000092C11210000000001 /* WebGUIView.swift in Sources */,
 				0A00000B2C11210000000001 /* KeychainStore.swift in Sources */,
 				0A00000C2C11210000000001 /* SyncthingCoreManager.swift in Sources */,
+				0A0000962C11210000000001 /* BackgroundSyncManager.swift in Sources */,
 				0A00000F2C11210000000001 /* FileBrowserView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -250,6 +254,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -280,6 +285,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = 42U58DQL6Q;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -312,6 +318,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -342,6 +349,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = 42U58DQL6Q;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -370,7 +378,6 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
-				DEVELOPMENT_TEAM = 42U58DQL6Q;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDevelopmentRegion = "zh-Hans";
 				INFOPLIST_KEY_CFBundleDisplayName = "Sync Client";
@@ -384,12 +391,18 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "processing";
+				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = "me.tanglj.SyncthingiOS.background-sync";
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = me.tanglj.SyncthingiOS;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -399,7 +412,6 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 42U58DQL6Q;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDevelopmentRegion = "zh-Hans";
 				INFOPLIST_KEY_CFBundleDisplayName = "Sync Client";
@@ -413,12 +425,18 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportsDocumentBrowser = YES;
+				INFOPLIST_KEY_UIBackgroundModes = "processing";
+				INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers = "me.tanglj.SyncthingiOS.background-sync";
 				MARKETING_VERSION = 0.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = me.tanglj.SyncthingiOS;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};

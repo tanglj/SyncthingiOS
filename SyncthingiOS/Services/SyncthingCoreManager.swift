@@ -67,8 +67,24 @@ enum SyncthingCoreState: Equatable {
 
 @MainActor
 final class SyncthingCoreManager: ObservableObject {
-    static let localBaseURLString = "http://127.0.0.1:8384"
-    static let localAPIKey = "ios-local-syncthing-core"
+    static let fallbackBaseURLString = "http://127.0.0.1:8384"
+    static let fallbackAPIKey = "ios-local-syncthing-core"
+
+    static var localBaseURLString: String {
+        #if canImport(Ioscore)
+        return IoscoreGUIAddress()
+        #else
+        return fallbackBaseURLString
+        #endif
+    }
+
+    static var localAPIKey: String {
+        #if canImport(Ioscore)
+        return IoscoreAPIKey()
+        #else
+        return fallbackAPIKey
+        #endif
+    }
 
     @Published private(set) var state: SyncthingCoreState = .stopped
     private var startSequence = 0
@@ -76,7 +92,7 @@ final class SyncthingCoreManager: ObservableObject {
 
     var localSnapshot: SyncthingSnapshot {
         SyncthingSnapshot(
-            baseURL: URL(string: Self.localBaseURLString)!,
+            baseURL: URL(string: Self.localBaseURLString) ?? URL(string: Self.fallbackBaseURLString)!,
             apiKey: Self.localAPIKey
         )
     }
@@ -115,18 +131,19 @@ final class SyncthingCoreManager: ObservableObject {
         do {
             let homeURL = try localHomeURL()
             let syncRootURL = try localSyncRootURL()
-            let localBaseURLString = Self.localBaseURLString
-            let localAPIKey = Self.localAPIKey
             let deviceName = UIDevice.current.name
             try FileManager.default.createDirectory(at: homeURL, withIntermediateDirectories: true)
             activeSyncRootURL = syncRootURL
             try FileManager.default.createDirectory(at: syncRootURL, withIntermediateDirectories: true)
             try await Task.detached(priority: .userInitiated) {
                 var error: NSError?
+                // Pass empty gui/apiKey so Go generates a random port and
+                // random API key, preventing other apps on the device from
+                // guessing the REST API endpoint.
                 let didStart = IoscoreStartWithConfigDeviceNameAndSyncRoot(
                     homeURL.path,
-                    localBaseURLString,
-                    localAPIKey,
+                    "",
+                    "",
                     deviceName,
                     syncRootURL.path,
                     &error

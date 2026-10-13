@@ -2,14 +2,20 @@ package ioscore
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
+	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,7 +36,54 @@ import (
 const (
 	defaultGUIAddress = "http://127.0.0.1:8384"
 	defaultAPIKey     = "ios-local-syncthing-core"
+	guiStateFile      = "ios-gui.txt"
+	apiKeyStateFile   = "ios-apikey.txt"
 )
+
+// resolveGUIAddress returns a persisted random loopback address with a random
+// port, or the caller-provided address if it is non-default.  The first time
+// the app runs, a random high port (49152-65535) is generated and persisted so
+// that subsequent launches reuse the same port.
+func resolveGUIAddress(homeDir, requested string) string {
+	if requested != "" && requested != defaultGUIAddress {
+		return requested
+	}
+	statePath := filepath.Join(homeDir, guiStateFile)
+	if data, err := os.ReadFile(statePath); err == nil {
+		if s := strings.TrimSpace(string(data)); s != "" {
+			return s
+		}
+	}
+	port, err := rand.Int(rand.Reader, big.NewInt(16384))
+	if err != nil {
+		port = big.NewInt(8000) // fallback
+	}
+	addr := "http://127.0.0.1:" + strconv.Itoa(49152+int(port.Int64()))
+	_ = os.WriteFile(statePath, []byte(addr), 0o600)
+	return addr
+}
+
+// resolveAPIKey returns a persisted random API key, or the caller-provided key
+// if it is non-default.  The first time the app runs, 32 random bytes are hex
+// encoded and persisted so that subsequent launches reuse the same key.
+func resolveAPIKey(homeDir, requested string) string {
+	if requested != "" && requested != defaultAPIKey {
+		return requested
+	}
+	statePath := filepath.Join(homeDir, apiKeyStateFile)
+	if data, err := os.ReadFile(statePath); err == nil {
+		if s := strings.TrimSpace(string(data)); s != "" {
+			return s
+		}
+	}
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return defaultAPIKey // fallback (should not happen)
+	}
+	key := hex.EncodeToString(buf)
+	_ = os.WriteFile(statePath, []byte(key), 0o600)
+	return key
+}
 
 var runtimeState = &runner{}
 
@@ -72,12 +125,10 @@ func StartWithConfigDeviceNameAndSyncRoot(homeDir, guiAddress, apiKey, deviceNam
 	if homeDir == "" {
 		return errors.New("home directory is required")
 	}
-	if guiAddress == "" {
-		guiAddress = defaultGUIAddress
-	}
-	if apiKey == "" {
-		apiKey = defaultAPIKey
-	}
+	// Resolve persisted random port and API key when defaults are requested,
+	// so other apps on the device cannot guess the REST API endpoint.
+	guiAddress = resolveGUIAddress(homeDir, guiAddress)
+	apiKey = resolveAPIKey(homeDir, apiKey)
 
 	runtimeState.mut.Lock()
 	if runtimeState.app != nil || runtimeState.starting {
@@ -149,6 +200,14 @@ func buildCore(ctx context.Context, cancel context.CancelFunc, homeDir, guiAddre
 	os.Setenv("STNORESTART", "1")
 	os.Setenv("STVERSIONEXTRA", "Syncthing iOS")
 	build.AddTag("ios")
+
+	// Aggressive GC tuning for iOS: the default GOGC=100 lets the heap double
+	// before collecting, and Go never returns memory to the OS on its own.
+	// iOS jetsam kills apps by physical RSS, so we lower the trigger and cap
+	// the soft memory limit so collections happen earlier and memory is
+	// returned to the OS more aggressively.
+	debug.SetGCPercent(25)
+	debug.SetMemoryLimit(400 << 20) // 400 MB soft limit
 
 	slogutil.SetDefaultLevel(slog.LevelInfo)
 	slogutil.SetLevelOverrides("")
@@ -244,6 +303,12 @@ func loadMobileConfig(path, homeDir, syncRoot string, cert tls.Certificate, evLo
 	if err := prepareMobileConfig(&cfg, myID, homeDir, syncRoot, guiAddress, apiKey, deviceName); err != nil {
 		return nil, err
 	}
+	// Only re-wrap and save if the prepared config differs from the original,
+	// so we don't trigger a needless config-change cycle on every launch.
+	original := cfgWrapper.RawCopy()
+	if configEqual(cfg, original) {
+		return cfgWrapper, nil
+	}
 	cfgWrapper = config.Wrap(path, cfg, myID, evLogger)
 	if err := cfgWrapper.Save(); err != nil {
 		if originalVersion != config.CurrentVersion {
@@ -260,6 +325,18 @@ func prepareMobileConfig(cfg *config.Configuration, myID protocol.DeviceID, home
 	cfg.GUI.APIKey = apiKey
 	cfg.Options.StartBrowser = false
 	cfg.Options.AutoUpgradeIntervalH = 0
+	// Disable usage reporting and crash reporting (no consent dialog on iOS).
+	cfg.Options.URAccepted = -1
+	cfg.Options.URURL = ""
+	cfg.Options.CREnabled = false
+	cfg.Options.CRURL = ""
+	// Disable version checks — we manage updates via the App Store.
+	cfg.Options.ReleasesURL = ""
+	// iOS doesn't expose Unix permissions to users; ignore them to avoid
+	// perpetual permission-mismatch sync errors.
+	cfg.Defaults.Folder.IgnorePerms = true
+	// Set a sane default rescan interval for mobile (1 hour).
+	cfg.Defaults.Folder.RescanIntervalS = 3600
 
 	deviceName = strings.TrimSpace(deviceName)
 	if deviceName == "" {
@@ -303,6 +380,11 @@ func prepareMobileConfig(cfg *config.Configuration, myID protocol.DeviceID, home
 		}
 	}
 	return nil
+}
+
+// configEqual reports whether two configurations are semantically equal.
+func configEqual(a, b config.Configuration) bool {
+	return reflect.DeepEqual(a, b)
 }
 
 func mobileFolderPath(syncRoot, folderID string) string {
@@ -422,16 +504,25 @@ func stopCore(app *syncthing.App, database db.DB, cancel context.CancelFunc) {
 // Stop shuts down the in-process Syncthing core.
 func Stop() {
 	runtimeState.mut.Lock()
-	defer runtimeState.mut.Unlock()
-
-	stopCore(runtimeState.app, runtimeState.database, runtimeState.cancel)
+	app := runtimeState.app
+	database := runtimeState.database
+	cancel := runtimeState.cancel
 	runtimeState.app = nil
 	runtimeState.database = nil
 	runtimeState.cancel = nil
 	runtimeState.early = nil
 	runtimeState.starting = false
 	runtimeState.startedAt = time.Time{}
+	runtimeState.step = "stopping"
+	runtimeState.mut.Unlock()
+
+	// Stop outside the lock so Ping/IsRunning/Status remain responsive while
+	// the core takes time to flush and close the database.
+	stopCore(app, database, cancel)
+
+	runtimeState.mut.Lock()
 	runtimeState.step = "stopped"
+	runtimeState.mut.Unlock()
 }
 
 func IsRunning() bool {

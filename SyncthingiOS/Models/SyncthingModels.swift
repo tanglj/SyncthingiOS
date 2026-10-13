@@ -144,3 +144,32 @@ extension Int64 {
         ByteCountFormatter.string(fromByteCount: self, countStyle: .file)
     }
 }
+
+// MARK: - Events (P1-7)
+
+/// A single Syncthing event from /rest/events.
+struct SyncthingEvent: Decodable {
+    let id: Int64
+    let type: String
+    let time: String?
+
+    /// Event types that should trigger an overview refresh.
+    var shouldRefreshOverview: Bool {
+        switch type {
+        case "DeviceConnected",
+             "DeviceDisconnected",
+             "DevicePaused",
+             "DeviceUnpaused",
+             "FolderConfigSaved",
+             "DeviceConfigSaved",
+             "ConfigSaved",
+             "FolderCompleted",
+             "FolderRejected",
+             "DeviceRejected",
+             "LocalIndexUpdated":
+            return true
+        default:
+            return false
+        }
+    }
+}

@@ -61,11 +61,29 @@ struct SyncthingAPI {
         try await post("/rest/db/scan", queryItems: queryItems)
     }
 
-    private func get<T: Decodable>(_ path: String) async throws -> T {
-        let data = try await request(path, method: "GET")
+    /// Long-poll /rest/events starting from the given event ID.
+    /// Returns new events since that ID, or an empty array on timeout.
+    func pollEvents(since: Int64) async throws -> [SyncthingEvent] {
+        try validate()
+        let queryItems = [
+            URLQueryItem(name: "since", value: String(since)),
+            URLQueryItem(name: "limit", value: "100")
+        ]
+        let data = try await request("/rest/events", method: "GET", queryItems: queryItems)
         let decoder = JSONDecoder()
         do {
-            return try decoder.decode(T.self, from: data)
+            return try decoder.decode([SyncthingEvent].self, from: data)
+        } catch {
+            throw SyncthingAPIError.decodingFailed("/rest/events: \(error.localizedDescription)")
+        }
+    }
+
+    private static let sharedDecoder = JSONDecoder()
+
+    private func get<T: Decodable>(_ path: String) async throws -> T {
+        let data = try await request(path, method: "GET")
+        do {
+            return try Self.sharedDecoder.decode(T.self, from: data)
         } catch {
             throw SyncthingAPIError.decodingFailed("\(path): \(error.localizedDescription)")
         }
