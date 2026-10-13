@@ -123,6 +123,7 @@ private struct FileBrowserDirectoryView: View {
             .sheet(item: $moveCandidate) { item in
                 MoveDestinationPicker(
                     movingEntry: item,
+                    currentFolderURL: currentURL,
                     syncRootURL: core.syncRootURL,
                     onCancel: {
                         moveCandidate = nil
@@ -741,25 +742,33 @@ private struct MoveDestinationPicker: View {
     @Environment(\.dismiss) private var dismiss
 
     let movingEntry: SharedFileEntry
+    let currentFolderURL: URL?
     let syncRootURL: URL?
     let onCancel: () -> Void
     let onMove: (URL) -> Void
 
     @State private var path: [URL] = []
 
+    private var destinationRootURL: URL? {
+        MoveDestinationPolicy.topLevelSyncFolderURL(
+            currentFolderURL: currentFolderURL,
+            syncRootURL: syncRootURL
+        ) ?? syncRootURL?.standardizedFileURL
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             MoveDestinationDirectoryView(
                 movingEntry: movingEntry,
-                directoryURL: syncRootURL,
-                syncRootURL: syncRootURL,
+                directoryURL: destinationRootURL,
+                syncRootURL: destinationRootURL,
                 onMove: handleMove
             )
             .navigationDestination(for: URL.self) { directoryURL in
                 MoveDestinationDirectoryView(
                     movingEntry: movingEntry,
                     directoryURL: directoryURL,
-                    syncRootURL: syncRootURL,
+                    syncRootURL: destinationRootURL,
                     onMove: handleMove
                 )
             }
@@ -913,6 +922,29 @@ private struct MoveDestinationDirectoryView: View {
 }
 
 private enum MoveDestinationPolicy {
+    static func topLevelSyncFolderURL(currentFolderURL: URL?, syncRootURL: URL?) -> URL? {
+        guard let currentFolderURL, let syncRootURL else { return nil }
+
+        let rootURL = syncRootURL.standardizedFileURL
+        let currentURL = currentFolderURL.standardizedFileURL
+        let rootPath = rootURL.path
+        let currentPath = currentURL.path
+        guard currentPath.hasPrefix(rootPath + "/") else { return nil }
+
+        guard let firstComponent = currentPath
+            .dropFirst(rootPath.count + 1)
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .first else {
+            return nil
+        }
+
+        let topLevelURL = rootURL
+            .appendingPathComponent(String(firstComponent), isDirectory: true)
+            .standardizedFileURL
+        guard isDirectory(topLevelURL) else { return nil }
+        return topLevelURL
+    }
+
     static func canBrowse(_ directoryURL: URL, movingEntry: SharedFileEntry) -> Bool {
         let directoryPath = directoryURL.standardizedFileURL.path
         let sourcePath = movingEntry.url.standardizedFileURL.path
